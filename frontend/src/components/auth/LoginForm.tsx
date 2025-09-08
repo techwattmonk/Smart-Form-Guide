@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,6 +30,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
+  const router = useRouter();
 
   const {
     register,
@@ -43,6 +45,9 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
     try {
       await login(data.email, data.password);
       toast.success('Welcome back!');
+
+      // Redirect to dashboard after successful login
+      router.push('/dashboard');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {

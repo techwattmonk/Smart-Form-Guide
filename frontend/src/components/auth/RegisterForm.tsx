@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -34,6 +35,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { register: registerUser } = useAuth();
+  const router = useRouter();
 
   const {
     register,
@@ -48,6 +50,9 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     try {
       await registerUser(data.email, data.password, data.full_name);
       toast.success('Account created successfully!');
+
+      // Redirect to dashboard after successful registration
+      router.push('/dashboard');
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Registration failed');
     } finally {

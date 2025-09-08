@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +10,7 @@ import { toast } from 'sonner';
 export function GoogleLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
   const { googleLogin } = useAuth();
+  const router = useRouter();
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
@@ -26,6 +28,9 @@ export function GoogleLoginButton() {
       
       await googleLogin(mockGoogleData);
       toast.success('Successfully signed in with Google!');
+
+      // Redirect to dashboard after successful login
+      router.push('/dashboard');
     } catch (error: any) {
       toast.error('Google sign-in failed');
     } finally {
