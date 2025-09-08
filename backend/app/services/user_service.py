@@ -7,7 +7,7 @@ from bson import ObjectId
 
 class UserService:
     def __init__(self):
-        self.collection_name = "users"
+        self.collection_name = "app_users"
 
     async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
         """Get user by email"""
@@ -36,9 +36,12 @@ class UserService:
         
         # Hash password and create user
         hashed_password = get_password_hash(user_create.password)
+        # Generate username from email (part before @)
+        username = user_create.email.split('@')[0]
         user_data = {
             "email": user_create.email,
             "full_name": user_create.full_name,
+            "username": username,
             "hashed_password": hashed_password,
             "is_active": user_create.is_active,
             "created_at": datetime.utcnow(),
@@ -62,7 +65,7 @@ class UserService:
     async def create_google_user(self, email: str, full_name: str, google_id: str, profile_picture: str = None) -> UserInDB:
         """Create or update user from Google OAuth"""
         db = await get_database()
-        
+
         # Check if user exists
         existing_user = await self.get_user_by_email(email)
         if existing_user:
@@ -75,11 +78,14 @@ class UserService:
                 existing_user.google_id = google_id
                 existing_user.profile_picture = profile_picture
             return existing_user
-        
+
         # Create new user
+        # Generate username from email (part before @)
+        username = email.split('@')[0]
         user_data = {
             "email": email,
             "full_name": full_name,
+            "username": username,
             "hashed_password": "",  # No password for Google users
             "is_active": True,
             "google_id": google_id,
@@ -87,10 +93,10 @@ class UserService:
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
-        
+
         result = await db[self.collection_name].insert_one(user_data)
         user_data["_id"] = result.inserted_id
-        
+
         return UserInDB(**user_data)
 
 user_service = UserService()

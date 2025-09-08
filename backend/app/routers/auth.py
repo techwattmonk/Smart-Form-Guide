@@ -88,12 +88,12 @@ async def google_login(google_request: GoogleLoginRequest):
             google_id=google_request.google_id,
             profile_picture=google_request.profile_picture
         )
-        
+
         access_token = create_access_token(
             data={"sub": user.email},
             expires_delta=timedelta(minutes=int(config("ACCESS_TOKEN_EXPIRE_MINUTES")))
         )
-        
+
         return {
             "access_token": access_token,
             "token_type": "bearer",
