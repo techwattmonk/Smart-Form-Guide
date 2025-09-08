@@ -105,7 +105,7 @@ async def google_login(google_request: GoogleLoginRequest):
                 "profile_picture": user.profile_picture
             }
         }
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to authenticate with Google"
