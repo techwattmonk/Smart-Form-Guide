@@ -5,8 +5,6 @@ This repository contains the Smart Form Guide project.
 ## Branches
 
 - **main**: Main production branch
-- **ishaan**: Development branch for Ishaan
-- **sanchit**: Development branch for Sanchit  
 - **combined**: Integration branch for combined work
 
 ## Getting Started
