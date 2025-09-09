@@ -1,40 +1,75 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+// Declare global google object
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 export function GoogleLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
   const { googleLogin } = useAuth();
   const router = useRouter();
 
-  const handleGoogleLogin = async () => {
+  useEffect(() => {
+    // Load Google Identity Services script
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          client_id: '838332261192-budi1id57969rso2hfml57lfonoefopa.apps.googleusercontent.com',
+          callback: handleCredentialResponse,
+        });
+      }
+    };
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
+  const handleCredentialResponse = async (response: any) => {
     setIsLoading(true);
     try {
-      // For demo purposes, we'll simulate Google OAuth
-      // In a real app, you'd integrate with Google OAuth 2.0
-      
-      // Simulate Google OAuth response
-      const mockGoogleData = {
-        email: 'demo@example.com',
-        name: 'Demo User',
-        sub: 'google_123456789',
-        picture: 'https://via.placeholder.com/150'
-      };
-      
-      await googleLogin(mockGoogleData);
-      toast.success('Successfully signed in with Google!');
+      // Decode the JWT token to get user info
+      const payload = JSON.parse(atob(response.credential.split('.')[1]));
 
-      // Redirect to dashboard after successful login
+      const googleData = {
+        email: payload.email,
+        name: payload.name,
+        sub: payload.sub,
+        picture: payload.picture
+      };
+
+      await googleLogin(googleData);
+      toast.success('Successfully signed in with Google!');
       router.push('/dashboard');
     } catch (error: any) {
       toast.error('Google sign-in failed');
+      console.error('Google sign-in error:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    if (window.google) {
+      window.google.accounts.id.prompt(); // Show the One Tap dialog
+    } else {
+      toast.error('Google Sign-In not loaded yet. Please try again.');
     }
   };
 
