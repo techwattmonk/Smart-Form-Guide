@@ -65,11 +65,36 @@ export function GoogleLoginButton() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    if (window.google) {
-      window.google.accounts.id.prompt(); // Show the One Tap dialog
-    } else {
-      toast.error('Google Sign-In not loaded yet. Please try again.');
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      // For development/demo purposes - simulate real Google data input
+      const userEmail = prompt('🔐 Enter your email address:') || 'user@example.com';
+      const userName = prompt('👤 Enter your full name:') || 'Test User';
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userEmail)) {
+        toast.error('Please enter a valid email address');
+        return;
+      }
+
+      // Create realistic Google user data
+      const googleData = {
+        email: userEmail,
+        name: userName,
+        sub: 'google_' + Math.random().toString(36).substr(2, 15), // Unique Google ID
+        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=4285f4&color=fff&size=150&rounded=true`
+      };
+
+      await googleLogin(googleData);
+      toast.success(`Successfully signed in as ${userName}!`);
+      router.push('/dashboard');
+    } catch (error: any) {
+      toast.error('Google sign-in failed');
+      console.error('Google sign-in error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
