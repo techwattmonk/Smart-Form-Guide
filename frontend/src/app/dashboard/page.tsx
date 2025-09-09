@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Zap, Upload, User, LogOut } from 'lucide-react';
+import { FileText, Zap, Upload, User, LogOut, Search } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -24,8 +24,7 @@ export default function DashboardPage() {
       color: 'from-blue-500 to-cyan-500',
       hoverColor: 'hover:from-blue-600 hover:to-cyan-600',
       action: () => {
-        // TODO: Navigate to planset upload page
-        console.log('Navigate to planset upload');
+        router.push('/upload/planset');
       }
     },
     {
@@ -35,8 +34,17 @@ export default function DashboardPage() {
       color: 'from-green-500 to-emerald-500',
       hoverColor: 'hover:from-green-600 hover:to-emerald-600',
       action: () => {
-        // TODO: Navigate to utility bill upload page
-        console.log('Navigate to utility bill upload');
+        router.push('/upload/utility');
+      }
+    },
+    {
+      title: 'Document Search',
+      description: 'Search through uploaded documents using AI-powered semantic search',
+      icon: Search,
+      color: 'from-purple-500 to-pink-500',
+      hoverColor: 'hover:from-purple-600 hover:to-pink-600',
+      action: () => {
+        router.push('/query');
       }
     }
   ];
@@ -108,7 +116,7 @@ export default function DashboardPage() {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {uploadOptions.map((option, index) => (
             <motion.div
               key={option.title}
