@@ -18,28 +18,19 @@ interface UploadResponse {
 export default function PlansetUploadPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [files, setFiles] = useState<{ pdf1: File | null; pdf2: File | null }>({
-    pdf1: null,
-    pdf2: null
-  });
-  const [keys, setKeys] = useState<string>('');
+  const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFileChange = (fileType: 'pdf1' | 'pdf2', file: File | null) => {
-    setFiles(prev => ({ ...prev, [fileType]: file }));
+  const handleFileChange = (selectedFile: File | null) => {
+    setFile(selectedFile);
     setError(null);
   };
 
   const handleUpload = async () => {
-    if (!files.pdf1 || !files.pdf2) {
-      setError('Please select both PDF files');
-      return;
-    }
-
-    if (!keys.trim()) {
-      setError('Please enter the keys you want to extract');
+    if (!file) {
+      setError('Please select a PDF file');
       return;
     }
 
@@ -49,14 +40,7 @@ export default function PlansetUploadPage() {
 
     try {
       const formData = new FormData();
-      formData.append('pdf1', files.pdf1);
-      formData.append('pdf2', files.pdf2);
-      
-      // Split keys by newlines and add each as a separate form field
-      const keysList = keys.split('\n').filter(key => key.trim());
-      keysList.forEach(key => {
-        formData.append('keys', key.trim());
-      });
+      formData.append('pdf1', file);
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload_pdfs/`, {
         method: 'POST',
@@ -77,8 +61,7 @@ export default function PlansetUploadPage() {
   };
 
   const resetForm = () => {
-    setFiles({ pdf1: null, pdf2: null });
-    setKeys('');
+    setFile(null);
     setUploadResult(null);
     setError(null);
   };
@@ -126,10 +109,10 @@ export default function PlansetUploadPage() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-xl">
             <CardHeader className="text-center">
               <CardTitle className="text-2xl font-bold text-gray-900">
-                Upload Architectural Plansets
+                Upload Architectural Planset
               </CardTitle>
               <CardDescription className="text-gray-600">
-                Upload two PDF files and specify the keys you want to extract using AI analysis
+                Upload a PDF file for AI-powered architectural analysis
               </CardDescription>
             </CardHeader>
             
@@ -137,65 +120,31 @@ export default function PlansetUploadPage() {
               {!uploadResult ? (
                 <>
                   {/* File Upload Section */}
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {/* PDF 1 Upload */}
-                    <div className="space-y-2">
-                      <Label htmlFor="pdf1" className="text-sm font-medium text-gray-700">
-                        First PDF File
-                      </Label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                        <Input
-                          id="pdf1"
-                          type="file"
-                          accept=".pdf"
-                          onChange={(e) => handleFileChange('pdf1', e.target.files?.[0] || null)}
-                          className="hidden"
-                        />
-                        <label htmlFor="pdf1" className="cursor-pointer">
-                          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">
-                            {files.pdf1 ? files.pdf1.name : 'Click to upload PDF 1'}
-                          </p>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* PDF 2 Upload */}
-                    <div className="space-y-2">
-                      <Label htmlFor="pdf2" className="text-sm font-medium text-gray-700">
-                        Second PDF File
-                      </Label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                        <Input
-                          id="pdf2"
-                          type="file"
-                          accept=".pdf"
-                          onChange={(e) => handleFileChange('pdf2', e.target.files?.[0] || null)}
-                          className="hidden"
-                        />
-                        <label htmlFor="pdf2" className="cursor-pointer">
-                          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">
-                            {files.pdf2 ? files.pdf2.name : 'Click to upload PDF 2'}
-                          </p>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Keys Input Section */}
                   <div className="space-y-2">
-                    <Label htmlFor="keys" className="text-sm font-medium text-gray-700">
-                      Keys to Extract (one per line)
+                    <Label htmlFor="pdf" className="text-sm font-medium text-gray-700">
+                      Planset PDF File
                     </Label>
-                    <textarea
-                      id="keys"
-                      value={keys}
-                      onChange={(e) => setKeys(e.target.value)}
-                      placeholder="Enter keys to extract, one per line:&#10;Building Area&#10;Number of Floors&#10;Construction Type&#10;Zoning Information"
-                      className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    />
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                      <Input
+                        id="pdf"
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      <label htmlFor="pdf" className="cursor-pointer">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-lg text-gray-600 mb-2">
+                          {file ? file.name : 'Click to upload planset PDF'}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Drag and drop or click to browse
+                        </p>
+                      </label>
+                    </div>
                   </div>
+
+
 
                   {/* Error Display */}
                   {error && (
@@ -212,18 +161,18 @@ export default function PlansetUploadPage() {
                   {/* Upload Button */}
                   <Button
                     onClick={handleUpload}
-                    disabled={isUploading || !files.pdf1 || !files.pdf2 || !keys.trim()}
+                    disabled={isUploading || !file}
                     className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
                   >
                     {isUploading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Processing PDFs...
+                        Processing PDF...
                       </>
                     ) : (
                       <>
                         <Upload className="w-4 h-4 mr-2" />
-                        Upload and Process
+                        Upload and Analyze
                       </>
                     )}
                   </Button>
