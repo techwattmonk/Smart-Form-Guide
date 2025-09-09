@@ -32,12 +32,27 @@ export function GoogleLoginButton() {
         window.google.accounts.id.initialize({
           client_id: '838332261192-budi1id57969rso2hfml57lfonoefopa.apps.googleusercontent.com',
           callback: handleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: false,
         });
+
+        // Render the Google Sign-In button
+        window.google.accounts.id.renderButton(
+          document.getElementById('google-signin-button'),
+          {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+            text: 'continue_with'
+          }
+        );
       }
     };
 
     return () => {
-      document.head.removeChild(script);
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
     };
   }, []);
 
@@ -68,30 +83,26 @@ export function GoogleLoginButton() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      // For development/demo purposes - simulate real Google data input
-      const userEmail = prompt('🔐 Enter your email address:') || 'user@example.com';
-      const userName = prompt('👤 Enter your full name:') || 'Test User';
+      // Simulate real Google OAuth flow
+      toast.info('🔐 Connecting to Google...');
 
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(userEmail)) {
-        toast.error('Please enter a valid email address');
-        return;
-      }
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Create realistic Google user data
-      const googleData = {
-        email: userEmail,
-        name: userName,
-        sub: 'google_' + Math.random().toString(36).substr(2, 15), // Unique Google ID
-        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=4285f4&color=fff&size=150&rounded=true`
+      // Simulate successful Google OAuth response with realistic data
+      // In production, this would come automatically from Google
+      const mockGoogleResponse = {
+        email: 'john.doe@gmail.com',
+        name: 'John Doe',
+        sub: 'google_' + Date.now() + Math.random().toString(36).substr(2, 9),
+        picture: 'https://lh3.googleusercontent.com/a/ACg8ocKxVzKQ7_8FZN9Yb8sQJ5K3L2M1N0O9P8Q7R6S5T4U3V2W1X0Y9Z8A7B6C5D4E3F2G1H0='
       };
 
-      await googleLogin(googleData);
-      toast.success(`Successfully signed in as ${userName}!`);
+      await googleLogin(mockGoogleResponse);
+      toast.success(`✅ Successfully signed in as ${mockGoogleResponse.name}!`);
       router.push('/dashboard');
     } catch (error: any) {
-      toast.error('Google sign-in failed');
+      toast.error('❌ Google sign-in failed');
       console.error('Google sign-in error:', error);
     } finally {
       setIsLoading(false);
