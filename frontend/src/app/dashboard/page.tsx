@@ -24,8 +24,7 @@ export default function DashboardPage() {
       color: 'from-blue-500 to-cyan-500',
       hoverColor: 'hover:from-blue-600 hover:to-cyan-600',
       action: () => {
-        // TODO: Navigate to planset upload page
-        console.log('Navigate to planset upload');
+        router.push('/upload/planset');
       }
     },
     {
@@ -35,8 +34,7 @@ export default function DashboardPage() {
       color: 'from-green-500 to-emerald-500',
       hoverColor: 'hover:from-green-600 hover:to-emerald-600',
       action: () => {
-        // TODO: Navigate to utility bill upload page
-        console.log('Navigate to utility bill upload');
+        router.push('/upload/utility');
       }
     }
   ];

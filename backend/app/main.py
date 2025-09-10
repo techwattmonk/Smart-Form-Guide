@@ -13,7 +13,7 @@ from app.database import connect_to_mongo, close_mongo_connection
 
 # --- Config ---
 # Gemini GenAI API key
-GENAI_API_KEY = dotenv.get_key(".env", "GENAI_API_KEY")
+GENAI_API_KEY = dotenv.get_key("backend/.env", "GENAI_API_KEY")
 # Initialize embedding model
 embed_model = SentenceTransformer("all-mpnet-base-v2")
 
@@ -84,7 +84,7 @@ def store_in_chroma(text: str, source_name: str):
         documents=[text]
     )
 
-def query_gemini(prompt: str, model_name: str = "gemini-1.5-flash") -> str:
+def query_gemini(prompt: str, model_name: str = "gemini-2.0-flash") -> str:
     model = genai.GenerativeModel(model_name)
     response = model.generate_content(prompt)
     return response.text
