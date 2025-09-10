@@ -1,54 +1,45 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-from contextlib import asynccontextmanager
+from typing import List, Optional # Added Optional
 import fitz  # PyMuPDF
+import pandas as pd
 from sentence_transformers import SentenceTransformer
 import chromadb
 import uuid
-from google import generativeai as genai
+from google import genai
 import dotenv
+import io # Import io module
+import json # Import json module
+import os # Import os module for path manipulation
 from app.routers import auth, users
 from app.database import connect_to_mongo, close_mongo_connection
 
+from app.services.hometown import get_jurisdiction
+from app.services.google_sheets import get_google_sheet_data
+
 # --- Config ---
+# Google Sheet Configuration
+SPREADSHEET_ID = dotenv.get_key(".env", "SPREADSHEET_ID")
+WORKSHEET_NAME = dotenv.get_key(".env", "WORKSHEET_NAME")
+
 # Gemini GenAI API key
 GENAI_API_KEY = dotenv.get_key(".env", "GENAI_API_KEY")
-
-# Validate API key
-if not GENAI_API_KEY or GENAI_API_KEY == "your-gemini-api-key-here":
-    print("WARNING: Gemini API key not configured. Please set GENAI_API_KEY in .env file")
-    GENAI_API_KEY = None
-
 # Initialize embedding model
 embed_model = SentenceTransformer("all-mpnet-base-v2")
 
-# Initialize ChromaDB (local persistent storage) with telemetry disabled
-import os
-os.environ["ANONYMIZED_TELEMETRY"] = "False"
+# Initialize ChromaDB (local persistent storage)
 client_chroma = chromadb.PersistentClient(path="./chroma_db")
 collection = client_chroma.get_or_create_collection(name="pdf-embeddings")
 
-# Initialize Gemini GenAI client only if API key is available
-if GENAI_API_KEY:
-    genai.configure(api_key=GENAI_API_KEY)
-
-# --- Lifespan events ---
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await connect_to_mongo()
-    yield
-    # Shutdown
-    await close_mongo_connection()
+# Initialize Gemini GenAI client
+client = genai.Client(api_key=GENAI_API_KEY)
 
 # --- FastAPI app ---
 app = FastAPI(
     title="Smart Form Guide API",
     description="Backend API for Smart Form Guide application with authentication and file upload capabilities",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 # CORS middleware
@@ -60,14 +51,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database events
+@app.on_event("startup")
+async def startup_db_client():
+    await connect_to_mongo()
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    await close_mongo_connection()
+
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 # --- Models ---
-class UploadPDFResponse(BaseModel):
+class UploadResponse(BaseModel):
     message: str
-    extracted_keys: str
+    pdf_extracted_keys: Optional[str] = None
+    excel_jurisdiction_name: Optional[str] = None
+    excel_original_steps: Optional[str] = None
+    excel_smart_guidance_flow: Optional[str] = None
 
 class QueryRequest(BaseModel):
     question: str
@@ -96,27 +99,174 @@ def store_in_chroma(text: str, source_name: str):
     )
 
 def query_gemini(prompt: str, model_name: str = "gemini-2.0-flash") -> str:
-    if not GENAI_API_KEY:
-        return "Error: Gemini API key not configured. Please set GENAI_API_KEY in .env file"
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt
+    )
+    return response.text
 
-    try:
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"Error generating content: {str(e)}"
+def extract_first_page_text_fitz(pdf_file: UploadFile) -> str:
+    doc = fitz.open(stream=pdf_file.file.read(), filetype="pdf")
+    text = ""
+    if doc.page_count > 0:
+        text = doc.load_page(0).get_text()
+    doc.close()
+    return text
+
+async def process_excel_or_csv_guidance(file_content: bytes, file_type: str, jurisdiction_name: str):
+    file_like_object = io.BytesIO(file_content)
+    
+    df = None
+    if file_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        try:
+            df = pd.read_excel(file_like_object, engine="openpyxl", header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading XLSX file: {e}"
+            )
+    elif file_type == "application/vnd.ms-excel":
+        try:
+            df = pd.read_excel(file_like_object, engine="xlrd", header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading XLS file: {e}"
+            )
+    elif file_type == "text/csv":
+        try:
+            df = pd.read_csv(file_like_object, header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading CSV file: {e}"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only .xlsx, .xls Excel, and .csv files are supported."
+        )
+
+    if df.shape[1] < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must contain at least two columns for 'jurisdiction_name' and 'steps_to_follow'."
+        )
+    df.columns = ["jurisdiction_name", "steps_to_follow"] + list(df.columns[2:])
+
+    df["jurisdiction_name"] = df["jurisdiction_name"].astype(str)
+    df["steps_to_follow"] = df["steps_to_follow"].astype(str)
+
+    matching_rows = df[df["jurisdiction_name"].str.lower() == jurisdiction_name.lower()]
+
+    if matching_rows.empty:
+        return {
+            "jurisdiction_name": jurisdiction_name,
+            "original_steps": None,
+            "smart_guidance_flow": f"Jurisdiction '{jurisdiction_name}' not found in the file"
+        }
+
+    jurisdiction_row_index = matching_rows.index[0]
+    online_link = df.loc[jurisdiction_row_index, "steps_to_follow"]
+
+    if jurisdiction_row_index + 1 >= len(df):
+        return {
+            "jurisdiction_name": jurisdiction_name,
+            "original_steps": online_link, # If no steps, the link itself can be considered the guidance
+            "smart_guidance_flow": f"Online Link: {online_link}\nNo detailed steps found for jurisdiction '{jurisdiction_name}'. Only the online link is available."
+        }
+
+    steps = df.loc[jurisdiction_row_index + 1, "steps_to_follow"]
+    combined_guidance = f"Online Link: {online_link}\nSteps to Follow: {steps}"
+
+    prompt = f"""
+    Enhance and clarify the following steps into a smart user guidance flow:\n{combined_guidance}
+    """
+    response = query_gemini(prompt)
+    smart_flow = response
+
+    return {
+        "jurisdiction_name": jurisdiction_name,
+        "original_steps": steps,
+        "smart_guidance_flow": smart_flow
+    }
 
 # --- Endpoints ---
-@app.post("/upload_pdfs/", response_model=UploadPDFResponse)
+@app.post("/upload_pdfs/", response_model=UploadResponse)
 async def upload_pdfs(
     pdf1: UploadFile = File(...),
-    pdf2: UploadFile = File(...),
-    keys: List[str] = Form(...)
+    pdf2: UploadFile = File(...)
 ):
     """
     Upload two PDFs, extract text, create embeddings in Chroma,
     and extract specified keys from the combined text using Gemini.
     """
+    # Pre-step: Extract text from PDF2's first page and get customer address
+    first_page_text_pdf1 = extract_first_page_text_fitz(pdf1)
+    
+    address_prompt = f"""
+    Extract the customer address from the following text. If no address is found, return "N/A".
+    Text:
+    {first_page_text_pdf1}
+    """
+    customer_address = query_gemini(address_prompt)
+    
+    # Immediately pass the customer address to hometown.py
+    jurisdiction_details = get_jurisdiction(customer_address)
+
+    # Select the most specific jurisdiction name
+    selected_jurisdiction = "N/A"
+    if jurisdiction_details:
+        if jurisdiction_details.get("county"):
+            selected_jurisdiction = jurisdiction_details["county"]
+        elif jurisdiction_details.get("township"):
+            selected_jurisdiction = jurisdiction_details["township"]
+        elif jurisdiction_details.get("place"):
+            selected_jurisdiction = jurisdiction_details["place"]
+
+    # Check if Google Sheet processing is desired and credentials are available
+    if SPREADSHEET_ID and WORKSHEET_NAME:
+        try:
+            # Construct the path to credentials.json relative to the current file
+            credentials_file_path = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "credentials.json"))
+
+            # Check if credentials file exists
+            if not os.path.exists(credentials_file_path):
+                print(f"Warning: Google Sheets credentials file not found at {credentials_file_path}. Skipping Google Sheets processing.")
+            else:
+                print(f"Attempting to fetch Google Sheets data for jurisdiction: {selected_jurisdiction}")
+                # Fetch data from Google Sheet
+                sheet_data_bytes = get_google_sheet_data(
+                    spreadsheet_id=SPREADSHEET_ID,
+                    worksheet_name=WORKSHEET_NAME,
+                    credentials_path=credentials_file_path # Use the relative path
+                )
+                print(f"Successfully retrieved {len(sheet_data_bytes)} bytes from Google Sheets")
+
+                # Treat Google Sheet data as CSV for process_excel_or_csv_guidance
+                print(f"Processing Excel guidance for jurisdiction: {selected_jurisdiction}")
+                excel_guidance_result = await process_excel_or_csv_guidance(
+                    file_content=sheet_data_bytes,
+                    file_type="text/csv", # Google Sheets data is returned as CSV
+                    jurisdiction_name=selected_jurisdiction
+                )
+                print(f"Excel guidance processing completed successfully")
+                return {
+                    "message": "Google Sheet data processed and smart guidance generated.",
+                    "pdf_extracted_keys": None,
+                    "excel_jurisdiction_name": excel_guidance_result.get("jurisdiction_name"),
+                    "excel_original_steps": excel_guidance_result.get("original_steps"),
+                    "excel_smart_guidance_flow": excel_guidance_result.get("smart_guidance_flow"),
+                }
+        except Exception as e:
+            import traceback
+            print(f"Warning: Error processing Google Sheet: {type(e).__name__}: {e}")
+            print(f"Traceback: {traceback.format_exc()}")
+            # Don't raise the exception, just continue with normal processing
+
+    # Reset pdf1 file pointer after reading its first page
+    pdf1.file.seek(0)
+
     # 1️⃣ Extract text from PDFs
     text1 = extract_text_from_pdf(pdf1)
     text2 = extract_text_from_pdf(pdf2)
@@ -127,7 +277,24 @@ async def upload_pdfs(
     store_in_chroma(text2, "pdf2")
 
     # 3️⃣ Prepare prompt for Gemini key extraction
-    keys_str = "\n".join(keys)
+    # Read keys from fields.json
+    try:
+        # Construct the path to fields.json relative to the backend directory
+        fields_file_path = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fields.json"))
+        with open(fields_file_path, "r") as f:
+            keys = json.load(f)
+        keys_str = "\n".join(keys)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"fields.json not found at {fields_file_path}."
+        )
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error decoding fields.json. Ensure it's valid JSON."
+        )
+
     prompt = f"""
 Extract the following keys from the text below and return in JSON format:
 {keys_str}
@@ -137,18 +304,12 @@ Text:
 """
     extracted_keys = query_gemini(prompt)
 
-    # If Gemini fails, provide a basic fallback response
-    if extracted_keys.startswith("Error:"):
-        extracted_keys = f"""{{
-    "status": "processed_without_ai",
-    "message": "Files uploaded successfully. AI analysis unavailable - please configure Gemini API key.",
-    "files_processed": ["planset.pdf", "utility_bill.pdf"],
-    "text_length": {len(full_text)}
-}}"""
-
     return {
         "message": "PDFs processed, embeddings stored in Chroma, keys extracted.",
-        "extracted_keys": extracted_keys
+        "pdf_extracted_keys": extracted_keys,
+        "excel_jurisdiction_name": None,
+        "excel_original_steps": None,
+        "excel_smart_guidance_flow": None,
     }
 
 @app.post("/query/", response_model=QueryResponse)
@@ -184,6 +345,102 @@ Answer clearly and concisely:
     answer = query_gemini(prompt)
 
     return {"answer": answer}
+
+@app.post("/upload_excel_generate_guidance/")
+async def upload_excel_generate_guidance(
+    file: UploadFile = File(...),
+    jurisdiction_name: str = Form(...)
+):
+    """
+    Upload Excel with 'jurisdiction_name' and 'steps_to_follow' columns.
+    Provide jurisdiction_name separately; backend finds it and calls Gemini.
+    """
+    # Read the content of the UploadFile into a BytesIO object
+    # This ensures the file-like object is fully buffered and seekable for pandas
+    contents = await file.read()
+    file_like_object = io.BytesIO(contents)
+    
+    df = None
+    if file.content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+        try:
+            df = pd.read_excel(file_like_object, engine="openpyxl", header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading XLSX file: {e}"
+            )
+    elif file.content_type == "application/vnd.ms-excel":
+        try:
+            df = pd.read_excel(file_like_object, engine="xlrd", header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading XLS file: {e}"
+            )
+    elif file.content_type == "text/csv":
+        try:
+            df = pd.read_csv(file_like_object, header=None, skiprows=1)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error reading CSV file: {e}"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Only .xlsx, .xls Excel, and .csv files are supported."
+        )
+
+    # Assign column names as there are no headers in the file
+    if df.shape[1] < 2:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must contain at least two columns for 'jurisdiction_name' and 'steps_to_follow'."
+        )
+    df.columns = ["jurisdiction_name", "steps_to_follow"] + list(df.columns[2:])
+
+    # Ensure the assigned columns are treated as strings for comparison
+    df["jurisdiction_name"] = df["jurisdiction_name"].astype(str)
+    df["steps_to_follow"] = df["steps_to_follow"].astype(str)
+
+    # Find the row index where the jurisdiction_name matches
+    matching_rows = df[df["jurisdiction_name"].str.lower() == jurisdiction_name.lower()]
+
+    if matching_rows.empty:
+        return {"error": f"Jurisdiction '{jurisdiction_name}' not found in the file"}
+
+    # Get the index of the first matching row
+    jurisdiction_row_index = matching_rows.index[0]
+
+    # Extract the URL from the 'steps_to_follow' column of the matching row
+    online_link = df.loc[jurisdiction_row_index, "steps_to_follow"]
+
+    # Check if there is a next row for steps
+    if jurisdiction_row_index + 1 >= len(df):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No steps found for jurisdiction '{jurisdiction_name}'. Expected a row following the jurisdiction entry."
+        )
+
+    # Extract the steps from the 'steps_to_follow' column of the next row
+    steps = df.loc[jurisdiction_row_index + 1, "steps_to_follow"]
+
+    # Combine the link and steps for the LLM prompt
+    combined_guidance = f"Online Link: {online_link}\nSteps to Follow: {steps}"
+
+    prompt = f"""
+    Enhance and clarify the following steps into a smart user guidance flow:\n{combined_guidance}
+    """
+    # Call Gemini to enhance steps
+    response = query_gemini(prompt)
+
+    smart_flow = response
+
+    return {
+        "jurisdiction_name": jurisdiction_name,
+        "original_steps": steps,
+        "smart_guidance_flow": smart_flow
+    }
 
 @app.get("/")
 async def root():

@@ -91,3 +91,9 @@ node_modules/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Google Service Account Credentials
+backend/credentials.json
+
+# ChromaDB data
+backend/chroma_db/
