@@ -18,23 +18,13 @@ export default function DashboardPage() {
 
   const uploadOptions = [
     {
-      title: 'Planset Upload',
-      description: 'Upload and process architectural plansets with AI-powered analysis',
-      icon: FileText,
-      color: 'from-blue-500 to-cyan-500',
-      hoverColor: 'hover:from-blue-600 hover:to-cyan-600',
+      title: 'Document Upload',
+      description: 'Upload both planset and utility bill PDFs for comprehensive AI analysis',
+      icon: Upload,
+      color: 'from-blue-500 via-purple-500 to-green-500',
+      hoverColor: 'hover:from-blue-600 hover:via-purple-600 hover:to-green-600',
       action: () => {
-        router.push('/upload/planset');
-      }
-    },
-    {
-      title: 'Utility Bill Upload',
-      description: 'Process utility bills for energy analysis and insights',
-      icon: Zap,
-      color: 'from-green-500 to-emerald-500',
-      hoverColor: 'hover:from-green-600 hover:to-emerald-600',
-      action: () => {
-        router.push('/upload/utility');
+        router.push('/upload');
       }
     }
   ];
@@ -102,11 +92,11 @@ export default function DashboardPage() {
             Welcome back, {user?.full_name?.split(' ')[0]}!
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Choose an option below to start processing your documents with our AI-powered tools.
+            Upload both planset and utility bill documents for comprehensive AI-powered analysis.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 gap-8 max-w-2xl mx-auto">
           {uploadOptions.map((option, index) => (
             <motion.div
               key={option.title}
