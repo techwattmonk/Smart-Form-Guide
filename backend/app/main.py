@@ -98,7 +98,7 @@ def store_in_chroma(text: str, source_name: str):
         documents=[text]
     )
 
-def query_gemini(prompt: str, model_name: str = "gemini-2.0-flash") -> str:
+def query_gemini(prompt: str, model_name: str = "gemini-2.5-flash") -> str:
     response = client.models.generate_content(
         model=model_name,
         contents=prompt
@@ -157,7 +157,8 @@ async def process_excel_or_csv_guidance(file_content: bytes, file_type: str, jur
     df["jurisdiction_name"] = df["jurisdiction_name"].astype(str)
     df["steps_to_follow"] = df["steps_to_follow"].astype(str)
 
-    matching_rows = df[df["jurisdiction_name"].str.lower() == jurisdiction_name.lower()]
+    # Strip whitespace and compare (case-insensitive)
+    matching_rows = df[df["jurisdiction_name"].str.lower().str.strip() == jurisdiction_name.lower().strip()]
 
     if matching_rows.empty:
         return {
@@ -177,11 +178,45 @@ async def process_excel_or_csv_guidance(file_content: bytes, file_type: str, jur
         }
 
     steps = df.loc[jurisdiction_row_index + 1, "steps_to_follow"]
-    combined_guidance = f"Online Link: {online_link}\nSteps to Follow: {steps}"
 
     prompt = f"""
-    Enhance and clarify the following steps into a smart user guidance flow:\n{combined_guidance}
-    """
+You are an expert in creating user-friendly permit application guidance. Your task is to analyze the original permit requirements and transform them into clear, actionable steps that users can easily follow.
+
+ORIGINAL PERMIT REQUIREMENTS:
+{steps}
+
+ONLINE PORTAL LINK:
+{online_link}
+
+INSTRUCTIONS:
+1. Carefully analyze the original permit requirements above
+2. Identify each distinct requirement or step mentioned
+3. Transform each requirement into a clear, actionable step that tells users exactly what they need to DO
+4. Maintain the SAME ORDER as the original requirements
+5. Use simple, direct language that any homeowner can understand
+6. Include specific details mentioned in the original requirements (addresses, timeframes, contact info, etc.)
+7. If fees or payments are mentioned, include that information
+8. If pickup locations are mentioned, include the exact address
+9. If timeframes are mentioned (like "8 weeks"), include those
+
+FORMAT YOUR RESPONSE AS:
+Step 1: [Clear action the user needs to take]
+Step 2: [Next clear action]
+Step 3: [Next clear action]
+...and so on
+
+EXAMPLE OF GOOD STEPS:
+- "Prepare detailed solar plans including site plans and electrical diagrams"
+- "Obtain recorded Notice of Commencement from the county clerk"
+- "Submit application through the online portal at [specific link]"
+- "Wait for permit review and approval (approximately 8 weeks)"
+- "Pay permit fees online through the portal"
+- "Pick up approved permit in person at [specific address]"
+
+Remember: Each step should be a specific ACTION the user needs to take, not just information. Focus on what they need to DO, not just what they need to know.
+
+Transform the original requirements into clear steps now:
+"""
     response = query_gemini(prompt)
     smart_flow = response
 
@@ -425,12 +460,44 @@ async def upload_excel_generate_guidance(
     # Extract the steps from the 'steps_to_follow' column of the next row
     steps = df.loc[jurisdiction_row_index + 1, "steps_to_follow"]
 
-    # Combine the link and steps for the LLM prompt
-    combined_guidance = f"Online Link: {online_link}\nSteps to Follow: {steps}"
-
     prompt = f"""
-    Enhance and clarify the following steps into a smart user guidance flow:\n{combined_guidance}
-    """
+You are an expert in creating user-friendly permit application guidance. Your task is to analyze the original permit requirements and transform them into clear, actionable steps that users can easily follow.
+
+ORIGINAL PERMIT REQUIREMENTS:
+{steps}
+
+ONLINE PORTAL LINK:
+{online_link}
+
+INSTRUCTIONS:
+1. Carefully analyze the original permit requirements above
+2. Identify each distinct requirement or step mentioned
+3. Transform each requirement into a clear, actionable step that tells users exactly what they need to DO
+4. Maintain the SAME ORDER as the original requirements
+5. Use simple, direct language that any homeowner can understand
+6. Include specific details mentioned in the original requirements (addresses, timeframes, contact info, etc.)
+7. If fees or payments are mentioned, include that information
+8. If pickup locations are mentioned, include the exact address
+9. If timeframes are mentioned (like "8 weeks"), include those
+
+FORMAT YOUR RESPONSE AS:
+Step 1: [Clear action the user needs to take]
+Step 2: [Next clear action]
+Step 3: [Next clear action]
+...and so on
+
+EXAMPLE OF GOOD STEPS:
+- "Prepare detailed solar plans including site plans and electrical diagrams"
+- "Obtain recorded Notice of Commencement from the county clerk"
+- "Submit application through the online portal at [specific link]"
+- "Wait for permit review and approval (approximately 8 weeks)"
+- "Pay permit fees online through the portal"
+- "Pick up approved permit in person at [specific address]"
+
+Remember: Each step should be a specific ACTION the user needs to take, not just information. Focus on what they need to DO, not just what they need to know.
+
+Transform the original requirements into clear steps now:
+"""
     # Call Gemini to enhance steps
     response = query_gemini(prompt)
 

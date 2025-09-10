@@ -11,7 +11,10 @@ import { useRouter } from 'next/navigation';
 
 interface UploadResponse {
   message: string;
-  extracted_keys: string;
+  pdf_extracted_keys: string;
+  excel_jurisdiction_name?: string;
+  excel_original_steps?: string;
+  excel_smart_guidance_flow?: string;
 }
 
 export default function CombinedUploadPage() {
@@ -77,7 +80,7 @@ export default function CombinedUploadPage() {
       // Parse the extracted keys to get individual values
       let extractedData = {};
       try {
-        extractedData = JSON.parse(result.extracted_keys);
+        extractedData = JSON.parse(result.pdf_extracted_keys || '{}');
       } catch (error) {
         // If parsing fails, create a basic object
         extractedData = {
@@ -87,11 +90,22 @@ export default function CombinedUploadPage() {
         };
       }
 
-      // Redirect to steps page with extracted data
+      // Redirect to steps page with extracted data and Google Sheets data
       const params = new URLSearchParams();
       Object.entries(extractedData).forEach(([key, value]) => {
         params.append(key, String(value));
       });
+
+      // Add Google Sheets data if available
+      if (result.excel_jurisdiction_name) {
+        params.append('jurisdiction_name', result.excel_jurisdiction_name);
+      }
+      if (result.excel_original_steps) {
+        params.append('original_steps', result.excel_original_steps);
+      }
+      if (result.excel_smart_guidance_flow) {
+        params.append('smart_guidance_flow', result.excel_smart_guidance_flow);
+      }
 
       router.push(`/steps?${params.toString()}`);
     } catch (err) {
