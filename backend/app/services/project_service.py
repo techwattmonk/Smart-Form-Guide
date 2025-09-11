@@ -218,7 +218,7 @@ class ProjectService:
     # Embedded document management methods
     async def add_embedded_document(self, project_id: str, owner_id: str,
                                   document_type: DocumentType, filename: str,
-                                  file_path: str, file_size: int, content_type: str) -> bool:
+                                  file_path: str) -> bool:
         """Add an embedded document (planset or utility bill) to a project"""
         db = await get_database()
 
@@ -227,12 +227,10 @@ class ProjectService:
         if not project:
             return False
 
-        # Create embedded document
+        # Create embedded document - simplified with only essential PDF info
         embedded_doc = EmbeddedDocument(
             filename=filename,
             document_type=document_type,
-            file_size=file_size,
-            content_type=content_type,
             file_path=file_path,
             uploaded_at=datetime.utcnow()
         )
@@ -246,51 +244,22 @@ class ProjectService:
             {
                 "$set": {
                     field_name: embedded_doc.model_dump(),
-                    "updated_at": datetime.utcnow(),
-                    "document_count": await self._calculate_document_count(project_id)
+                    "updated_at": datetime.utcnow()
                 }
             }
         )
 
-        return result.modified_count > 0
-
-    async def update_embedded_document_analysis(self, project_id: str, owner_id: str,
-                                              document_type: DocumentType,
-                                              extracted_text: Optional[str] = None,
-                                              analysis_results: Optional[dict] = None,
-                                              customer_address: Optional[str] = None,
-                                              jurisdiction_details: Optional[dict] = None) -> bool:
-        """Update analysis results for an embedded document"""
-        db = await get_database()
-
-        # Verify the project belongs to the user
-        project = await self.get_project_by_id(project_id, owner_id)
-        if not project:
-            return False
-
-        # Determine which field to update
-        field_prefix = "planset_document" if document_type == DocumentType.PLANSET else "utility_bill_document"
-
-        # Build update fields
-        update_fields = {"updated_at": datetime.utcnow()}
-
-        if extracted_text is not None:
-            update_fields[f"{field_prefix}.extracted_text"] = extracted_text
-        if analysis_results is not None:
-            update_fields[f"{field_prefix}.analysis_results"] = analysis_results
-        if customer_address is not None:
-            update_fields[f"{field_prefix}.customer_address"] = customer_address
-            update_fields["customer_address"] = customer_address  # Also update project-level field
-        if jurisdiction_details is not None:
-            update_fields[f"{field_prefix}.jurisdiction_details"] = jurisdiction_details
-
-        # Update the project
-        result = await db[self.collection_name].update_one(
-            {"_id": ObjectId(project_id), "owner_id": ObjectId(owner_id)},
-            {"$set": update_fields}
-        )
+        # Update document count after successful update
+        if result.modified_count > 0:
+            new_count = await self._calculate_document_count(project_id)
+            await db[self.collection_name].update_one(
+                {"_id": ObjectId(project_id)},
+                {"$set": {"document_count": new_count}}
+            )
 
         return result.modified_count > 0
+
+
 
     async def _calculate_document_count(self, project_id: str) -> int:
         """Calculate the number of documents in a project"""

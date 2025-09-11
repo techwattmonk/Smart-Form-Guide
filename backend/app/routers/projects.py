@@ -187,16 +187,13 @@ async def upload_documents_to_project(
             owner_id=str(current_user.id),
             document_type=DocumentType.PLANSET,
             filename=pdf1.filename,
-            file_path=planset_path,
-            file_size=len(planset_content),
-            content_type=pdf1.content_type
+            file_path=planset_path
         )
 
         if planset_success:
             documents.append({
                 "filename": pdf1.filename,
                 "document_type": DocumentType.PLANSET,
-                "file_size": len(planset_content),
                 "uploaded_at": datetime.utcnow()
             })
 
@@ -214,16 +211,13 @@ async def upload_documents_to_project(
             owner_id=str(current_user.id),
             document_type=DocumentType.UTILITY_BILL,
             filename=pdf2.filename,
-            file_path=utility_path,
-            file_size=len(utility_content),
-            content_type=pdf2.content_type
+            file_path=utility_path
         )
 
         if utility_success:
             documents.append({
                 "filename": pdf2.filename,
                 "document_type": DocumentType.UTILITY_BILL,
-                "file_size": len(utility_content),
                 "uploaded_at": datetime.utcnow()
             })
 
