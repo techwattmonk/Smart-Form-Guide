@@ -76,6 +76,11 @@ app.include_router(county_guidance.router, prefix="/api/county-guidance", tags=[
 from app.services.county_guidance_service import county_guidance_service
 from app.models.county_guidance import CountyGuidanceCreate
 
+# Import for document handling
+from datetime import datetime
+from app.models.project import DocumentType
+import uuid
+
 # --- Models ---
 class UploadResponse(BaseModel):
     message: str
@@ -353,13 +358,91 @@ async def upload_pdfs(
     try:
         created_project = await project_service.create_project(project_data, str(current_user.id))
         print(f"Created project: {created_project.name} with county: {created_project.county_name}")
+        project_id = str(created_project.id)
     except Exception as e:
         print(f"Warning: Failed to create project: {e}")
+        # If project creation fails, we can't save documents, so return early
+        if excel_guidance_result.get("smart_guidance_flow"):
+            return {
+                "message": "Smart guidance generated successfully, but project creation failed.",
+                "pdf_extracted_keys": None,
+                "excel_jurisdiction_name": excel_guidance_result.get("jurisdiction_name"),
+                "excel_original_steps": excel_guidance_result.get("original_steps"),
+                "excel_smart_guidance_flow": excel_guidance_result.get("smart_guidance_flow"),
+            }
+        project_id = None
+
+    # 🚀 IMPORTANT: Save PDFs as embedded documents in the project
+    documents_saved = []
+    if project_id:
+        print(f"💾 Saving PDFs as embedded documents to project {project_id}")
+
+        # Reset file pointers to beginning
+        pdf1.file.seek(0)
+        pdf2.file.seek(0)
+
+        # Create upload directory
+        upload_dir = f"uploads/projects/{project_id}"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Save planset PDF
+        planset_filename = f"{uuid.uuid4()}_{pdf1.filename}"
+        planset_path = os.path.join(upload_dir, planset_filename)
+
+        with open(planset_path, "wb") as buffer:
+            planset_content = await pdf1.read()
+            buffer.write(planset_content)
+
+        # Add planset as embedded document
+        planset_success = await project_service.add_embedded_document(
+            project_id=project_id,
+            owner_id=str(current_user.id),
+            document_type=DocumentType.PLANSET,
+            filename=pdf1.filename,
+            file_path=planset_path
+        )
+
+        if planset_success:
+            documents_saved.append({
+                "filename": pdf1.filename,
+                "document_type": "planset",
+                "uploaded_at": datetime.utcnow()
+            })
+            print(f"✅ Saved planset document: {pdf1.filename}")
+
+        # Save utility bill PDF
+        utility_filename = f"{uuid.uuid4()}_{pdf2.filename}"
+        utility_path = os.path.join(upload_dir, utility_filename)
+
+        with open(utility_path, "wb") as buffer:
+            utility_content = await pdf2.read()
+            buffer.write(utility_content)
+
+        # Add utility bill as embedded document
+        utility_success = await project_service.add_embedded_document(
+            project_id=project_id,
+            owner_id=str(current_user.id),
+            document_type=DocumentType.UTILITY_BILL,
+            filename=pdf2.filename,
+            file_path=utility_path
+        )
+
+        if utility_success:
+            documents_saved.append({
+                "filename": pdf2.filename,
+                "document_type": "utility_bill",
+                "uploaded_at": datetime.utcnow()
+            })
+            print(f"✅ Saved utility bill document: {pdf2.filename}")
+
+        print(f"📊 Total documents saved: {len(documents_saved)}")
 
     # Return early if we have guidance from cache or Google Sheets
     if excel_guidance_result.get("smart_guidance_flow"):
         return {
             "message": "Smart guidance generated successfully.",
+            "project_id": project_id,
+            "documents_saved": documents_saved,
             "pdf_extracted_keys": None,
             "excel_jurisdiction_name": excel_guidance_result.get("jurisdiction_name"),
             "excel_original_steps": excel_guidance_result.get("original_steps"),
