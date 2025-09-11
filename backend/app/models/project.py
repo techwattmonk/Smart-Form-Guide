@@ -12,11 +12,47 @@ class ProjectStatus(str, Enum):
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
+# Document models for project context
+class DocumentType(str, Enum):
+    PLANSET = "planset"
+    UTILITY_BILL = "utility_bill"
+    OTHER = "other"
+
+# Embedded document model (stored within project)
+class EmbeddedDocument(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
+
+    filename: str = Field(..., description="Original filename")
+    document_type: DocumentType = Field(..., description="Type of document")
+    file_size: int = Field(..., description="File size in bytes")
+    content_type: str = Field(..., description="MIME type of the file")
+    file_path: str = Field(..., description="Path to the stored file")
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+    # Analysis results
+    extracted_text: Optional[str] = Field(None, description="Extracted text from the document")
+    analysis_results: Optional[dict] = Field(None, description="AI analysis results")
+    customer_address: Optional[str] = Field(None, description="Extracted customer address")
+    jurisdiction_details: Optional[dict] = Field(None, description="Jurisdiction analysis results")
+
 class ProjectBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Project name")
     county_name: Optional[str] = Field(None, max_length=200, description="County name for jurisdiction")
     smart_guidance_flow: Optional[str] = Field(None, description="Smart guidance flow steps as JSON string")
     status: ProjectStatus = Field(default=ProjectStatus.DRAFT, description="Project status")
+
+    # Embedded documents
+    planset_document: Optional[EmbeddedDocument] = Field(None, description="Planset PDF document")
+    utility_bill_document: Optional[EmbeddedDocument] = Field(None, description="Utility bill PDF document")
+
+    # Analysis results from documents
+    extracted_keys: Optional[dict] = Field(None, description="Combined extracted data from all documents")
+    customer_address: Optional[str] = Field(None, description="Customer address extracted from documents")
+    jurisdiction_steps: Optional[str] = Field(None, description="Jurisdiction permit steps")
 
 class ProjectCreate(ProjectBase):
     pass
@@ -57,12 +93,7 @@ class Project(ProjectBase):
     document_count: int = 0
     last_analysis_date: Optional[datetime] = None
 
-# Document models for project context
-class DocumentType(str, Enum):
-    PLANSET = "planset"
-    UTILITY_BILL = "utility_bill"
-    OTHER = "other"
-
+# Legacy document models (for backward compatibility)
 class DocumentBase(BaseModel):
     filename: str = Field(..., description="Original filename")
     document_type: DocumentType = Field(..., description="Type of document")
@@ -84,7 +115,7 @@ class DocumentInDB(DocumentBase):
     owner_id: PyObjectId = Field(..., description="ID of the user who owns this document")
     file_path: str = Field(..., description="Path to the stored file")
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Analysis results
     extracted_text: Optional[str] = Field(None, description="Extracted text from the document")
     analysis_results: Optional[dict] = Field(None, description="AI analysis results")

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from typing import List, Optional
+from datetime import datetime
 import os
 import uuid
 from app.routers.auth import get_current_user
@@ -169,7 +170,7 @@ async def upload_documents_to_project(
         upload_dir = f"uploads/projects/{project_id}"
         os.makedirs(upload_dir, exist_ok=True)
 
-        # Save files and create document records
+        # Save files and add as embedded documents
         documents = []
 
         # Process planset PDF
@@ -177,54 +178,59 @@ async def upload_documents_to_project(
         planset_path = os.path.join(upload_dir, planset_filename)
 
         with open(planset_path, "wb") as buffer:
-            content = await pdf1.read()
-            buffer.write(content)
+            planset_content = await pdf1.read()
+            buffer.write(planset_content)
 
-        planset_doc = DocumentCreate(
-            filename=pdf1.filename,
+        # Add planset as embedded document
+        planset_success = await project_service.add_embedded_document(
+            project_id=project_id,
+            owner_id=str(current_user.id),
             document_type=DocumentType.PLANSET,
-            file_size=len(content),
-            content_type=pdf1.content_type,
-            project_id=project.id
+            filename=pdf1.filename,
+            file_path=planset_path,
+            file_size=len(planset_content),
+            content_type=pdf1.content_type
         )
 
-        planset_document = await project_service.create_document(
-            planset_doc, str(current_user.id), planset_path
-        )
-        documents.append(planset_document)
+        if planset_success:
+            documents.append({
+                "filename": pdf1.filename,
+                "document_type": DocumentType.PLANSET,
+                "file_size": len(planset_content),
+                "uploaded_at": datetime.utcnow()
+            })
 
         # Process utility bill PDF
         utility_filename = f"{uuid.uuid4()}_{pdf2.filename}"
         utility_path = os.path.join(upload_dir, utility_filename)
 
         with open(utility_path, "wb") as buffer:
-            content = await pdf2.read()
-            buffer.write(content)
+            utility_content = await pdf2.read()
+            buffer.write(utility_content)
 
-        utility_doc = DocumentCreate(
-            filename=pdf2.filename,
+        # Add utility bill as embedded document
+        utility_success = await project_service.add_embedded_document(
+            project_id=project_id,
+            owner_id=str(current_user.id),
             document_type=DocumentType.UTILITY_BILL,
-            file_size=len(content),
-            content_type=pdf2.content_type,
-            project_id=project.id
+            filename=pdf2.filename,
+            file_path=utility_path,
+            file_size=len(utility_content),
+            content_type=pdf2.content_type
         )
 
-        utility_document = await project_service.create_document(
-            utility_doc, str(current_user.id), utility_path
-        )
-        documents.append(utility_document)
+        if utility_success:
+            documents.append({
+                "filename": pdf2.filename,
+                "document_type": DocumentType.UTILITY_BILL,
+                "file_size": len(utility_content),
+                "uploaded_at": datetime.utcnow()
+            })
 
         return {
             "message": "Documents uploaded successfully",
             "project_id": project_id,
-            "documents": [
-                {
-                    "id": str(doc.id),
-                    "filename": doc.filename,
-                    "document_type": doc.document_type,
-                    "uploaded_at": doc.uploaded_at
-                } for doc in documents
-            ]
+            "documents": documents
         }
 
     except HTTPException:
@@ -233,4 +239,48 @@ async def upload_documents_to_project(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload documents: {str(e)}"
+        )
+
+@router.get("/{project_id}/documents")
+async def get_project_documents(
+    project_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """Get all documents for a specific project (including embedded documents)"""
+    try:
+        # Get embedded documents from the project
+        embedded_docs = await project_service.get_embedded_documents(project_id, str(current_user.id))
+
+        # Also get legacy documents for backward compatibility
+        legacy_docs = await project_service.get_project_documents(project_id, str(current_user.id))
+
+        # Convert legacy documents to dict format
+        legacy_docs_dict = [
+            {
+                "id": str(doc.id),
+                "filename": doc.filename,
+                "document_type": doc.document_type,
+                "file_size": doc.file_size,
+                "content_type": doc.content_type,
+                "uploaded_at": doc.uploaded_at,
+                "extracted_text": doc.extracted_text,
+                "analysis_results": doc.analysis_results,
+                "customer_address": doc.customer_address,
+                "jurisdiction_details": doc.jurisdiction_details
+            } for doc in legacy_docs
+        ]
+
+        # Combine both types of documents
+        all_documents = embedded_docs + legacy_docs_dict
+
+        return {
+            "project_id": project_id,
+            "documents": all_documents,
+            "total_count": len(all_documents)
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get project documents: {str(e)}"
         )

@@ -21,6 +21,10 @@ wheels/
 *.egg
 MANIFEST
 
+eula-agreement.md
+privacy-policy.md
+terms-conditions.md
+
 # Virtual environments
 backend/venv/
 backend/env/
