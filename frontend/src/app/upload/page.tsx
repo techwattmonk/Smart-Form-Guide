@@ -22,8 +22,8 @@ export default function CombinedUploadPage() {
   const [plansetFile, setPlansetFile] = useState<File | null>(null);
   const [utilityFile, setUtilityFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string>('');
 
   const handlePlansetFileChange = (selectedFile: File | null) => {
     setPlansetFile(selectedFile);
@@ -44,6 +44,10 @@ export default function CombinedUploadPage() {
   };
 
   const handleUpload = async () => {
+    if (!projectName.trim()) {
+      setError('Please enter a project name');
+      return;
+    }
     if (!plansetFile) {
       setError('Please select a planset PDF file');
       return;
@@ -66,8 +70,19 @@ export default function CombinedUploadPage() {
       formData.append('keys', 'energy_consumption');
       formData.append('keys', 'billing_period');
 
+      // Add project name (required)
+      formData.append('project_name', projectName.trim());
+
+      // Add authentication token
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload_pdfs/`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 
@@ -136,7 +151,7 @@ export default function CombinedUploadPage() {
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Dashboard</span>
             </Button>
-            
+
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1">
                 <FileText className="w-5 h-5 text-blue-600" />
@@ -168,7 +183,26 @@ export default function CombinedUploadPage() {
             </CardHeader>
             
             <CardContent className="space-y-6">
-                  {/* Planset Upload Section */}
+              {/* Project Name Section */}
+              <div className="space-y-2">
+                <Label htmlFor="project-name" className="text-sm font-medium text-gray-700">
+                  Project Name *
+                </Label>
+                <Input
+                  id="project-name"
+                  type="text"
+                  placeholder="e.g., Travis County Solar Project"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  className="w-full"
+                  required
+                />
+                <p className="text-xs text-gray-500">
+                  A project will be created automatically with the extracted county and permit steps
+                </p>
+              </div>
+
+              {/* Planset Upload Section */}
                   <div className="space-y-2">
                     <Label htmlFor="planset" className="text-sm font-medium text-gray-700 flex items-center space-x-2">
                       <FileText className="w-4 h-4 text-blue-600" />

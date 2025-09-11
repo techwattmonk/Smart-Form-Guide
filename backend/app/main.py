@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional # Added Optional
@@ -12,8 +12,11 @@ import dotenv
 import io # Import io module
 import json # Import json module
 import os # Import os module for path manipulation
-from app.routers import auth, users
+from app.routers import auth, users, projects
 from app.database import connect_to_mongo, close_mongo_connection
+from app.models.user import UserInDB
+from app.routers.auth import get_current_user
+from app.services.project_service import ProjectService
 
 from app.services.hometown import get_jurisdiction
 from app.services.google_sheets import get_google_sheet_data
@@ -63,6 +66,7 @@ async def shutdown_db_client():
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
 # --- Models ---
 class UploadResponse(BaseModel):
@@ -98,7 +102,7 @@ def store_in_chroma(text: str, source_name: str):
         documents=[text]
     )
 
-def query_gemini(prompt: str, model_name: str = "gemini-2.5-flash") -> str:
+def query_gemini(prompt: str, model_name: str = "gemini-2.0-flash") -> str:
     response = client.models.generate_content(
         model=model_name,
         contents=prompt
@@ -230,7 +234,9 @@ Transform the original requirements into clear steps now:
 @app.post("/upload_pdfs/", response_model=UploadResponse)
 async def upload_pdfs(
     pdf1: UploadFile = File(...),
-    pdf2: UploadFile = File(...)
+    pdf2: UploadFile = File(...),
+    project_name: str = Form(...),
+    current_user: UserInDB = Depends(get_current_user)
 ):
     """
     Upload two PDFs, extract text, create embeddings in Chroma,
@@ -286,6 +292,28 @@ async def upload_pdfs(
                     jurisdiction_name=selected_jurisdiction
                 )
                 print(f"Excel guidance processing completed successfully")
+
+                # Create a project with the extracted data
+                project_service = ProjectService()
+
+                # Use the provided project name
+                final_project_name = project_name.strip()
+
+                # Create project with extracted county and smart guidance flow
+                from app.models.project import ProjectCreate
+                project_data = ProjectCreate(
+                    name=final_project_name,
+                    county_name=selected_jurisdiction,
+                    smart_guidance_flow=excel_guidance_result.get("smart_guidance_flow"),
+                    status="draft"
+                )
+
+                try:
+                    created_project = await project_service.create_project(project_data, str(current_user.id))
+                    print(f"Created project: {created_project.name} with county: {created_project.county_name}")
+                except Exception as e:
+                    print(f"Warning: Failed to create project: {e}")
+
                 return {
                     "message": "Google Sheet data processed and smart guidance generated.",
                     "pdf_extracted_keys": None,

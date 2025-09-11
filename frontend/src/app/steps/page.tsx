@@ -273,11 +273,11 @@ export default function StepsPage() {
           <div className="flex justify-between items-center h-16">
             <Button
               variant="ghost"
-              onClick={() => router.push('/upload')}
+              onClick={() => router.push('/dashboard')}
               className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Back to Upload</span>
+              <span>Back to Dashboard</span>
             </Button>
             
             <div className="flex items-center space-x-2">

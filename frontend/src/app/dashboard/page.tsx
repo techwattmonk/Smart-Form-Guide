@@ -1,36 +1,96 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Zap, Upload, User, LogOut } from 'lucide-react';
+import { FileText, Zap, Upload, User, LogOut, FolderPlus, Search, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+
+import { ProjectCard } from '@/components/projects/ProjectCard';
+import { projectsService, Project } from '@/lib/projects';
+import { Input } from '@/components/ui/input';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const handleLogout = () => {
     logout();
     router.push('/auth');
   };
 
-  const uploadOptions = [
-    {
-      title: 'Document Upload',
-      description: 'Upload both planset and utility bill PDFs for comprehensive AI analysis',
-      icon: Upload,
-      color: 'from-blue-500 via-purple-500 to-green-500',
-      hoverColor: 'hover:from-blue-600 hover:via-purple-600 hover:to-green-600',
-      action: () => {
-        router.push('/upload');
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      const projectsData = await projectsService.getProjects();
+      setProjects(projectsData);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load projects';
+      toast.error(errorMessage);
+      console.error('Error loading projects:', error);
+
+      // If authentication error, don't keep trying
+      if (errorMessage.includes('Authentication expired')) {
+        return;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+
+
+
+
+  const handleDeleteProject = async (project: Project) => {
+    if (window.confirm(`Are you sure you want to delete "${project.name}"? This action cannot be undone.`)) {
+      try {
+        await projectsService.deleteProject(project.id);
+        toast.success('Project deleted successfully');
+        loadProjects();
+      } catch (error) {
+        toast.error('Failed to delete project');
+        console.error('Error deleting project:', error);
       }
     }
-  ];
+  };
+
+  const handleUploadDocuments = (project: Project) => {
+    router.push('/upload');
+  };
+
+  const handleViewSteps = (project: Project) => {
+    if (project.county_name && project.smart_guidance_flow) {
+      // Navigate to steps page with project data
+      const params = new URLSearchParams({
+        jurisdiction_name: project.county_name,
+        original_steps: 'Project Steps', // You might want to store original steps in the project
+        smart_guidance_flow: project.smart_guidance_flow
+      });
+      router.push(`/steps?${params.toString()}`);
+    }
+  };
+
+  const filteredProjects = projects.filter(project =>
+    project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (project.customer_name && project.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
       {/* Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
@@ -86,101 +146,106 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="mb-8"
         >
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Welcome back, {user?.full_name?.split(' ')[0]}!
-          </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Upload both planset and utility bill documents for comprehensive AI-powered analysis.
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 gap-8 max-w-2xl mx-auto">
-          {uploadOptions.map((option, index) => (
-            <motion.div
-              key={option.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 + index * 0.1 }}
-            >
-              <Card className="h-full cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border-0 bg-white/80 backdrop-blur-sm">
-                <CardHeader className="text-center pb-4">
-                  <motion.div
-                    className={`w-16 h-16 mx-auto mb-4 bg-gradient-to-r ${option.color} rounded-full flex items-center justify-center`}
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <option.icon className="w-8 h-8 text-white" />
-                  </motion.div>
-                  <CardTitle className="text-xl font-bold text-gray-900">
-                    {option.title}
-                  </CardTitle>
-                  <CardDescription className="text-gray-600">
-                    {option.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <Button
-                    onClick={option.action}
-                    className={`w-full bg-gradient-to-r ${option.color} ${option.hoverColor} text-white border-0`}
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Get Started
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Additional Features Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="mt-16 text-center"
-        >
-          <h3 className="text-2xl font-bold text-gray-900 mb-8">
-            Why Choose Smart Form Guide?
-          </h3>
-          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {[
-              {
-                title: 'AI-Powered Analysis',
-                description: 'Advanced machine learning algorithms process your documents with high accuracy',
-                icon: '🤖'
-              },
-              {
-                title: 'Fast Processing',
-                description: 'Get results in seconds, not hours. Our optimized pipeline ensures quick turnaround',
-                icon: '⚡'
-              },
-              {
-                title: 'Secure & Private',
-                description: 'Your documents are processed securely with enterprise-grade encryption',
-                icon: '🔒'
-              }
-            ].map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.6 + index * 0.1 }}
-                className="text-center"
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                Welcome back, {user?.full_name?.split(' ')[0]}!
+              </h2>
+              <p className="text-lg text-gray-600">
+                Manage your projects and document analysis workflows.
+              </p>
+            </div>
+            <div className="mt-4 sm:mt-0">
+              <Button
+                onClick={() => router.push('/upload')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
               >
-                <div className="text-4xl mb-4">{feature.icon}</div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                  {feature.title}
-                </h4>
-                <p className="text-gray-600">
-                  {feature.description}
-                </p>
-              </motion.div>
-            ))}
+                <Plus className="w-4 h-4 mr-2" />
+                Upload Documents
+              </Button>
+            </div>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search projects by name, customer, or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
         </motion.div>
+
+        {/* Projects Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <Card className="h-48 bg-gray-200" />
+              </div>
+            ))}
+          </div>
+        ) : filteredProjects.length > 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {filteredProjects.map((project, index) => (
+              <motion.div
+                key={`project-${project.id}-${index}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 * index }}
+              >
+                <ProjectCard
+                  project={project}
+                  onDelete={handleDeleteProject}
+                  onUpload={handleUploadDocuments}
+                  onView={handleViewSteps}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-center py-12"
+          >
+            <FolderPlus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {searchTerm ? 'No projects found' : 'No projects yet'}
+            </h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm
+                ? 'Try adjusting your search terms or upload documents to create a new project.'
+                : 'Upload your documents to create your first project and get started with AI analysis.'
+              }
+            </p>
+            {!searchTerm && (
+              <Button
+                onClick={() => router.push('/upload')}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Upload Documents
+              </Button>
+            )}
+          </motion.div>
+        )}
+
+
       </main>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }
