@@ -68,6 +68,14 @@ app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 
+# Import and include county guidance router
+from app.routers import county_guidance
+app.include_router(county_guidance.router, prefix="/api/county-guidance", tags=["county-guidance"])
+
+# Import county guidance service for caching
+from app.services.county_guidance_service import county_guidance_service
+from app.models.county_guidance import CountyGuidanceCreate
+
 # --- Models ---
 class UploadResponse(BaseModel):
     message: str
@@ -265,33 +273,61 @@ async def upload_pdfs(
         elif jurisdiction_details.get("place"):
             selected_jurisdiction = jurisdiction_details["place"]
 
-    # Check if Google Sheet processing is desired and credentials are available
-    if SPREADSHEET_ID and WORKSHEET_NAME:
-        try:
-            # Construct the path to credentials.json relative to the current file
-            credentials_file_path = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "credentials.json"))
+    # 🚀 NEW: Check cache first before processing Excel/Google Sheets
+    print(f"🔍 Checking cache for county: {selected_jurisdiction}")
+    cached_guidance = await county_guidance_service.get_county_guidance(selected_jurisdiction)
 
-            # Check if credentials file exists
-            if not os.path.exists(credentials_file_path):
-                print(f"Warning: Google Sheets credentials file not found at {credentials_file_path}. Skipping Google Sheets processing.")
-            else:
-                print(f"Attempting to fetch Google Sheets data for jurisdiction: {selected_jurisdiction}")
-                # Fetch data from Google Sheet
-                sheet_data_bytes = get_google_sheet_data(
-                    spreadsheet_id=SPREADSHEET_ID,
-                    worksheet_name=WORKSHEET_NAME,
-                    credentials_path=credentials_file_path # Use the relative path
-                )
-                print(f"Successfully retrieved {len(sheet_data_bytes)} bytes from Google Sheets")
+    excel_guidance_result = {}
 
-                # Treat Google Sheet data as CSV for process_excel_or_csv_guidance
-                print(f"Processing Excel guidance for jurisdiction: {selected_jurisdiction}")
-                excel_guidance_result = await process_excel_or_csv_guidance(
-                    file_content=sheet_data_bytes,
-                    file_type="text/csv", # Google Sheets data is returned as CSV
-                    jurisdiction_name=selected_jurisdiction
-                )
-                print(f"Excel guidance processing completed successfully")
+    if cached_guidance:
+        print(f"✅ Found cached guidance for {selected_jurisdiction} (used {cached_guidance.usage_count} times)")
+        excel_guidance_result = {
+            "smart_guidance_flow": cached_guidance.smart_guidance_flow
+        }
+    else:
+        print(f"❌ No cached guidance found for {selected_jurisdiction}. Processing from Excel/Google Sheets...")
+
+        # Check if Google Sheet processing is desired and credentials are available
+        if SPREADSHEET_ID and WORKSHEET_NAME:
+            try:
+                # Construct the path to credentials.json relative to the current file
+                credentials_file_path = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "credentials.json"))
+
+                # Check if credentials file exists
+                if not os.path.exists(credentials_file_path):
+                    print(f"Warning: Google Sheets credentials file not found at {credentials_file_path}. Skipping Google Sheets processing.")
+                else:
+                    print(f"Attempting to fetch Google Sheets data for jurisdiction: {selected_jurisdiction}")
+                    # Fetch data from Google Sheet
+                    sheet_data_bytes = get_google_sheet_data(
+                        spreadsheet_id=SPREADSHEET_ID,
+                        worksheet_name=WORKSHEET_NAME,
+                        credentials_path=credentials_file_path # Use the relative path
+                    )
+                    print(f"Successfully retrieved {len(sheet_data_bytes)} bytes from Google Sheets")
+
+                    # Treat Google Sheet data as CSV for process_excel_or_csv_guidance
+                    print(f"Processing Excel guidance for jurisdiction: {selected_jurisdiction}")
+                    excel_guidance_result = await process_excel_or_csv_guidance(
+                        file_content=sheet_data_bytes,
+                        file_type="text/csv", # Google Sheets data is returned as CSV
+                        jurisdiction_name=selected_jurisdiction
+                    )
+                    print(f"Excel guidance processing completed successfully")
+
+                    # 🚀 NEW: Cache the result for future use
+                    if excel_guidance_result.get("smart_guidance_flow"):
+                        print(f"💾 Caching guidance for {selected_jurisdiction}")
+                        try:
+                            guidance_create = CountyGuidanceCreate(
+                                county_name=selected_jurisdiction,
+                                smart_guidance_flow=excel_guidance_result["smart_guidance_flow"]
+                            )
+                            await county_guidance_service.create_county_guidance(guidance_create)
+                            print(f"✅ Successfully cached guidance for {selected_jurisdiction}")
+                        except Exception as cache_error:
+                            print(f"⚠️  Warning: Failed to cache guidance: {cache_error}")
+                            # Continue processing even if caching fails
 
                 # Create a project with the extracted data
                 project_service = ProjectService()
