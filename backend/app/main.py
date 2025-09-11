@@ -329,39 +329,42 @@ async def upload_pdfs(
                             print(f"⚠️  Warning: Failed to cache guidance: {cache_error}")
                             # Continue processing even if caching fails
 
-                # Create a project with the extracted data
-                project_service = ProjectService()
+            except Exception as e:
+                import traceback
+                print(f"Warning: Error processing Google Sheet: {type(e).__name__}: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+                # Don't raise the exception, just continue with normal processing
 
-                # Use the provided project name
-                final_project_name = project_name.strip()
+    # Create a project with the extracted data (moved outside the Google Sheets block)
+    project_service = ProjectService()
 
-                # Create project with extracted county and smart guidance flow
-                from app.models.project import ProjectCreate
-                project_data = ProjectCreate(
-                    name=final_project_name,
-                    county_name=selected_jurisdiction,
-                    smart_guidance_flow=excel_guidance_result.get("smart_guidance_flow"),
-                    status="draft"
-                )
+    # Use the provided project name
+    final_project_name = project_name.strip()
 
-                try:
-                    created_project = await project_service.create_project(project_data, str(current_user.id))
-                    print(f"Created project: {created_project.name} with county: {created_project.county_name}")
-                except Exception as e:
-                    print(f"Warning: Failed to create project: {e}")
+    # Create project with extracted county and smart guidance flow
+    from app.models.project import ProjectCreate
+    project_data = ProjectCreate(
+        name=final_project_name,
+        county_name=selected_jurisdiction,
+        smart_guidance_flow=excel_guidance_result.get("smart_guidance_flow"),
+        status="draft"
+    )
 
-                return {
-                    "message": "Google Sheet data processed and smart guidance generated.",
-                    "pdf_extracted_keys": None,
-                    "excel_jurisdiction_name": excel_guidance_result.get("jurisdiction_name"),
-                    "excel_original_steps": excel_guidance_result.get("original_steps"),
-                    "excel_smart_guidance_flow": excel_guidance_result.get("smart_guidance_flow"),
-                }
-        except Exception as e:
-            import traceback
-            print(f"Warning: Error processing Google Sheet: {type(e).__name__}: {e}")
-            print(f"Traceback: {traceback.format_exc()}")
-            # Don't raise the exception, just continue with normal processing
+    try:
+        created_project = await project_service.create_project(project_data, str(current_user.id))
+        print(f"Created project: {created_project.name} with county: {created_project.county_name}")
+    except Exception as e:
+        print(f"Warning: Failed to create project: {e}")
+
+    # Return early if we have guidance from cache or Google Sheets
+    if excel_guidance_result.get("smart_guidance_flow"):
+        return {
+            "message": "Smart guidance generated successfully.",
+            "pdf_extracted_keys": None,
+            "excel_jurisdiction_name": excel_guidance_result.get("jurisdiction_name"),
+            "excel_original_steps": excel_guidance_result.get("original_steps"),
+            "excel_smart_guidance_flow": excel_guidance_result.get("smart_guidance_flow"),
+        }
 
     # Reset pdf1 file pointer after reading its first page
     pdf1.file.seek(0)
