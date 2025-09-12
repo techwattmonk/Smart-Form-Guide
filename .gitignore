@@ -21,6 +21,7 @@ wheels/
 *.egg
 MANIFEST
 
+backend/uploads/projects/
 eula-agreement.md
 privacy-policy.md
 terms-conditions.md

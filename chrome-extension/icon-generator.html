@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Icon Generator - Smart Form Guide</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .icon-container {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        .icon {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        .icon-16 { width: 16px; height: 16px; }
+        .icon-32 { width: 32px; height: 32px; }
+        .icon-48 { width: 48px; height: 48px; }
+        .icon-128 { width: 128px; height: 128px; }
+        
+        .icon svg {
+            width: 70%;
+            height: 70%;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        
+        .instructions {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .instructions h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        
+        .instructions ol {
+            line-height: 1.6;
+        }
+        
+        .instructions code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Smart Form Guide - Chrome Extension Icons</h1>
+    
+    <div class="instructions">
+        <h2>How to Generate PNG Icons</h2>
+        <ol>
+            <li>Right-click on each icon below and select "Save image as..."</li>
+            <li>Save them with the following names in the <code>chrome-extension/icons/</code> folder:
+                <ul>
+                    <li>16x16 icon → <code>icon16.png</code></li>
+                    <li>32x32 icon → <code>icon32.png</code></li>
+                    <li>48x48 icon → <code>icon48.png</code></li>
+                    <li>128x128 icon → <code>icon128.png</code></li>
+                </ul>
+            </li>
+            <li>Update the manifest.json to include the icons section</li>
+            <li>Delete this HTML file after generating the icons</li>
+        </ol>
+    </div>
+    
+    <div style="text-align: center;">
+        <div class="icon-container">
+            <div class="icon icon-16" id="icon16">
+                <svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="64" cy="64" r="60" fill="url(#gradient)" stroke="#E5E7EB" stroke-width="2"/>
+                    <g transform="translate(32, 32)">
+                        <path d="M8 4V60C8 61.1046 8.89543 62 10 62H54C55.1046 62 56 61.1046 56 60V16L44 4H10C8.89543 4 8 4.89543 8 6V4Z" 
+                              fill="white" stroke="#667EEA" stroke-width="2"/>
+                        <path d="M44 4V16H56" fill="none" stroke="#667EEA" stroke-width="2"/>
+                        <line x1="16" y1="20" x2="40" y2="20" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="28" x2="48" y2="28" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="36" x2="44" y2="36" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="44" x2="40" y2="44" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <g transform="translate(40, 40)">
+                            <path d="M2 2L14 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M14 14L16 12" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="2" cy="2" r="1" fill="#10B981"/>
+                            <circle cx="6" cy="6" r="0.5" fill="#10B981"/>
+                            <circle cx="10" cy="10" r="0.5" fill="#10B981"/>
+                        </g>
+                    </g>
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667EEA;stop-opacity:0.1" />
+                            <stop offset="100%" style="stop-color:#764BA2;stop-opacity:0.1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>16x16</div>
+        </div>
+        
+        <div class="icon-container">
+            <div class="icon icon-32" id="icon32">
+                <svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="64" cy="64" r="60" fill="url(#gradient2)" stroke="#E5E7EB" stroke-width="2"/>
+                    <g transform="translate(32, 32)">
+                        <path d="M8 4V60C8 61.1046 8.89543 62 10 62H54C55.1046 62 56 61.1046 56 60V16L44 4H10C8.89543 4 8 4.89543 8 6V4Z" 
+                              fill="white" stroke="#667EEA" stroke-width="2"/>
+                        <path d="M44 4V16H56" fill="none" stroke="#667EEA" stroke-width="2"/>
+                        <line x1="16" y1="20" x2="40" y2="20" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="28" x2="48" y2="28" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="36" x2="44" y2="36" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="44" x2="40" y2="44" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <g transform="translate(40, 40)">
+                            <path d="M2 2L14 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M14 14L16 12" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="2" cy="2" r="1" fill="#10B981"/>
+                            <circle cx="6" cy="6" r="0.5" fill="#10B981"/>
+                            <circle cx="10" cy="10" r="0.5" fill="#10B981"/>
+                        </g>
+                    </g>
+                    <defs>
+                        <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667EEA;stop-opacity:0.1" />
+                            <stop offset="100%" style="stop-color:#764BA2;stop-opacity:0.1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>32x32</div>
+        </div>
+        
+        <div class="icon-container">
+            <div class="icon icon-48" id="icon48">
+                <svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="64" cy="64" r="60" fill="url(#gradient3)" stroke="#E5E7EB" stroke-width="2"/>
+                    <g transform="translate(32, 32)">
+                        <path d="M8 4V60C8 61.1046 8.89543 62 10 62H54C55.1046 62 56 61.1046 56 60V16L44 4H10C8.89543 4 8 4.89543 8 6V4Z" 
+                              fill="white" stroke="#667EEA" stroke-width="2"/>
+                        <path d="M44 4V16H56" fill="none" stroke="#667EEA" stroke-width="2"/>
+                        <line x1="16" y1="20" x2="40" y2="20" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="28" x2="48" y2="28" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="36" x2="44" y2="36" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="44" x2="40" y2="44" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <g transform="translate(40, 40)">
+                            <path d="M2 2L14 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M14 14L16 12" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="2" cy="2" r="1" fill="#10B981"/>
+                            <circle cx="6" cy="6" r="0.5" fill="#10B981"/>
+                            <circle cx="10" cy="10" r="0.5" fill="#10B981"/>
+                        </g>
+                    </g>
+                    <defs>
+                        <linearGradient id="gradient3" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667EEA;stop-opacity:0.1" />
+                            <stop offset="100%" style="stop-color:#764BA2;stop-opacity:0.1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>48x48</div>
+        </div>
+        
+        <div class="icon-container">
+            <div class="icon icon-128" id="icon128">
+                <svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="64" cy="64" r="60" fill="url(#gradient4)" stroke="#E5E7EB" stroke-width="2"/>
+                    <g transform="translate(32, 32)">
+                        <path d="M8 4V60C8 61.1046 8.89543 62 10 62H54C55.1046 62 56 61.1046 56 60V16L44 4H10C8.89543 4 8 4.89543 8 6V4Z" 
+                              fill="white" stroke="#667EEA" stroke-width="2"/>
+                        <path d="M44 4V16H56" fill="none" stroke="#667EEA" stroke-width="2"/>
+                        <line x1="16" y1="20" x2="40" y2="20" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="28" x2="48" y2="28" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="36" x2="44" y2="36" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <line x1="16" y1="44" x2="40" y2="44" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+                        <g transform="translate(40, 40)">
+                            <path d="M2 2L14 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M14 14L16 12" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="2" cy="2" r="1" fill="#10B981"/>
+                            <circle cx="6" cy="6" r="0.5" fill="#10B981"/>
+                            <circle cx="10" cy="10" r="0.5" fill="#10B981"/>
+                        </g>
+                    </g>
+                    <defs>
+                        <linearGradient id="gradient4" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667EEA;stop-opacity:0.1" />
+                            <stop offset="100%" style="stop-color:#764BA2;stop-opacity:0.1" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>128x128</div>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <h2>Alternative: Use Online Converter</h2>
+        <p>You can also:</p>
+        <ol>
+            <li>Copy the SVG code from <code>chrome-extension/icons/icon.svg</code></li>
+            <li>Use an online SVG to PNG converter (like <code>convertio.co</code> or <code>cloudconvert.com</code>)</li>
+            <li>Generate PNG files in the required sizes: 16x16, 32x32, 48x48, and 128x128 pixels</li>
+            <li>Save them as <code>icon16.png</code>, <code>icon32.png</code>, <code>icon48.png</code>, and <code>icon128.png</code></li>
+        </ol>
+    </div>
+</body>
+</html>

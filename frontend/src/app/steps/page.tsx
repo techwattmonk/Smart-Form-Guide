@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, MapPin, FileText, MessageCircle, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, FileText, MessageCircle, CheckCircle, Clock, AlertCircle, Chrome, Download, ExternalLink } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface StepItem {
@@ -353,6 +353,59 @@ export default function StepsPage() {
                     </div>
                   </motion.div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Extension Installation Prompt */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="mt-8"
+        >
+          <Card className="bg-gradient-to-r from-orange-50 to-blue-50 border-orange-200 shadow-lg">
+            <CardHeader>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Chrome className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-gray-900">Ready to Fill Out Forms?</CardTitle>
+                  <CardDescription>
+                    Install our Chrome extension to auto-fill permit forms with your uploaded documents
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900 mb-2">Smart Form Assistant</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Automatically detects form fields on permit websites</li>
+                    <li>• Suggests values from your uploaded planset and utility bill</li>
+                    <li>• Saves time and reduces data entry errors</li>
+                  </ul>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    onClick={() => router.push('/extension')}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Install Extension</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open('https://chrome.google.com/webstore', '_blank')}
+                    className="border-orange-200 text-orange-700 hover:bg-orange-50 px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Learn More</span>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

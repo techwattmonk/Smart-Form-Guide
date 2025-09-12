@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Chrome Extension</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .test-section h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #console {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Smart Form Guide Extension Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Extension Status</h2>
+        <div id="extensionStatus" class="status info">Checking extension...</div>
+        <button onclick="checkExtension()">Check Extension</button>
+        <button onclick="testMessage()">Test Message</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Form Detection Test</h2>
+        <p>This form should be detected by the extension:</p>
+        <form id="testForm">
+            <div style="margin: 10px 0;">
+                <label for="applicantName">Applicant Name:</label><br>
+                <input type="text" id="applicantName" name="applicant_name" placeholder="Enter your full name">
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label for="email">Email Address:</label><br>
+                <input type="email" id="email" name="email" placeholder="your.email@example.com">
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label for="phone">Phone Number:</label><br>
+                <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567">
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label for="address">Property Address:</label><br>
+                <input type="text" id="address" name="property_address" placeholder="123 Main St, City, State ZIP">
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label for="projectDescription">Project Description:</label><br>
+                <textarea id="projectDescription" name="project_description" rows="3" placeholder="Describe your solar installation project"></textarea>
+            </div>
+            
+            <div style="margin: 10px 0;">
+                <label for="systemSize">System Size (kW):</label><br>
+                <input type="number" id="systemSize" name="system_size" placeholder="10.5">
+            </div>
+            
+            <button type="submit">Submit Application</button>
+        </form>
+    </div>
+    
+    <div class="test-section">
+        <h2>Console Output</h2>
+        <div id="console"></div>
+        <button onclick="clearConsole()">Clear Console</button>
+    </div>
+
+    <script>
+        // Console logging
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            console.appendChild(logEntry);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '';
+        }
+
+        // Extension testing
+        function checkExtension() {
+            const statusDiv = document.getElementById('extensionStatus');
+            
+            // Check if extension APIs are available
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                statusDiv.className = 'status success';
+                statusDiv.textContent = '✅ Extension environment detected';
+                log('Extension environment is available', 'success');
+                
+                // Check if extension is installed
+                if (chrome.runtime.id) {
+                    log(`Extension ID: ${chrome.runtime.id}`, 'info');
+                }
+            } else {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '❌ Extension environment not detected';
+                log('Extension environment not available', 'error');
+            }
+        }
+
+        function testMessage() {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                log('Sending test message to extension...', 'info');
+                
+                chrome.runtime.sendMessage({
+                    type: 'GET_AUTH_STATUS'
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        log(`Message error: ${chrome.runtime.lastError.message}`, 'error');
+                    } else {
+                        log(`Message response: ${JSON.stringify(response)}`, 'success');
+                    }
+                });
+            } else {
+                log('Cannot send message - extension not available', 'error');
+            }
+        }
+
+        // Form submission handler
+        document.getElementById('testForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            log('Form submission prevented (test mode)', 'info');
+            
+            // Log form data
+            const formData = new FormData(this);
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            log(`Form data: ${JSON.stringify(data, null, 2)}`, 'info');
+        });
+
+        // Auto-check extension on load
+        window.addEventListener('load', function() {
+            log('Page loaded, checking extension...', 'info');
+            setTimeout(checkExtension, 500);
+        });
+
+        // Listen for extension messages
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+            chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                log(`Received message from extension: ${JSON.stringify(message)}`, 'info');
+                sendResponse({ received: true });
+            });
+        }
+    </script>
+</body>
+</html>

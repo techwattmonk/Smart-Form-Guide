@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Form Guide - Permit Assistant",
+  "version": "1.0.0",
+  "description": "Intelligent form filling assistant for solar permit applications. Automatically suggests field values from your uploaded documents.",
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "tabs",
+    "sidePanel"
+  ],
+
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://localhost:8000/*",
+    "https://*.gov/*",
+    "https://*.accela.com/*",
+    "https://*.permitflow.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.gov/*",
+        "https://*.accela.com/*",
+        "https://*.permitflow.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_end"
+    }
+  ],
+
+  "action": {
+    "default_title": "Smart Form Guide Assistant"
+  },
+
+  "side_panel": {
+    "default_path": "sidebar.html"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "*.js",
+        "*.css",
+        "*.html"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

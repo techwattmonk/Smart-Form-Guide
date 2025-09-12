@@ -1,0 +1,37 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#gradient)" stroke="#E5E7EB" stroke-width="2"/>
+  
+  <!-- Main Icon -->
+  <g transform="translate(32, 32)">
+    <!-- Document Icon -->
+    <path d="M8 4V60C8 61.1046 8.89543 62 10 62H54C55.1046 62 56 61.1046 56 60V16L44 4H10C8.89543 4 8 4.89543 8 6V4Z" 
+          fill="white" stroke="#667EEA" stroke-width="2"/>
+    
+    <!-- Document Corner -->
+    <path d="M44 4V16H56" fill="none" stroke="#667EEA" stroke-width="2"/>
+    
+    <!-- Form Lines -->
+    <line x1="16" y1="20" x2="40" y2="20" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="28" x2="48" y2="28" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="36" x2="44" y2="36" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+    <line x1="16" y1="44" x2="40" y2="44" stroke="#667EEA" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Magic Wand/Auto-fill Icon -->
+    <g transform="translate(40, 40)">
+      <path d="M2 2L14 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+      <path d="M14 14L16 12" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="2" cy="2" r="1" fill="#10B981"/>
+      <circle cx="6" cy="6" r="0.5" fill="#10B981"/>
+      <circle cx="10" cy="10" r="0.5" fill="#10B981"/>
+    </g>
+  </g>
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667EEA;stop-opacity:0.1" />
+      <stop offset="100%" style="stop-color:#764BA2;stop-opacity:0.1" />
+    </linearGradient>
+  </defs>
+</svg>

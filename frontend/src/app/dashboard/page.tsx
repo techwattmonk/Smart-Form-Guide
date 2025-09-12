@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Zap, Upload, User, LogOut, FolderPlus, Search, Plus } from 'lucide-react';
+import { FileText, Zap, Upload, User, LogOut, FolderPlus, Search, Plus, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -150,45 +150,79 @@ export default function DashboardPage() {
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-3">
                 Welcome back, {user?.full_name?.split(' ')[0]}!
               </h2>
-              <p className="text-lg text-gray-600">
-                Manage your projects and document analysis workflows.
+              <p className="text-lg text-gray-600 max-w-2xl">
+                Manage your projects and document analysis workflows with AI-powered permit assistance.
               </p>
+              <div className="flex items-center space-x-4 mt-4">
+                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                  <FileText className="w-4 h-4" />
+                  <span>{projects.length} {projects.length === 1 ? 'Project' : 'Projects'}</span>
+                </div>
+              </div>
             </div>
             <div className="mt-4 sm:mt-0">
               <Button
                 onClick={() => router.push('/upload')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                className="bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 hover:from-blue-600 hover:via-purple-600 hover:to-green-600 text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
               >
-                <Plus className="w-4 h-4 mr-2" />
+                <Upload className="w-5 h-5 mr-2" />
                 Upload Documents
               </Button>
             </div>
           </div>
 
+
+
           {/* Search and Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-8">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 placeholder="Search projects by name, customer, or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-12 py-3 text-lg border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm"
               />
+            </div>
+            <div className="flex items-center space-x-2 text-sm text-gray-500 bg-gray-50 px-4 py-3 rounded-xl">
+              <span className="font-medium">
+                {filteredProjects.length} of {projects.length} projects
+              </span>
             </div>
           </div>
         </motion.div>
 
         {/* Projects Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <Card className="h-48 bg-gray-200" />
-              </div>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: i * 0.1 }}
+                className="animate-pulse"
+              >
+                <Card className="h-64 bg-gradient-to-br from-gray-100 to-gray-200 border-0 shadow-lg">
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      <div className="h-4 bg-gray-300 rounded-lg w-3/4"></div>
+                      <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                      <div className="space-y-2">
+                        <div className="h-2 bg-gray-300 rounded w-full"></div>
+                        <div className="h-2 bg-gray-300 rounded w-2/3"></div>
+                      </div>
+                      <div className="flex space-x-2 pt-4">
+                        <div className="h-8 bg-gray-300 rounded-lg w-20"></div>
+                        <div className="h-8 bg-gray-300 rounded-lg w-16"></div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         ) : filteredProjects.length > 0 ? (
@@ -196,7 +230,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
           >
             {filteredProjects.map((project, index) => (
               <motion.div
@@ -219,27 +253,43 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-center py-12"
+            className="text-center py-20"
           >
-            <FolderPlus className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              {searchTerm ? 'No projects found' : 'No projects yet'}
-            </h3>
-            <p className="text-gray-600 mb-6">
-              {searchTerm
-                ? 'Try adjusting your search terms or upload documents to create a new project.'
-                : 'Upload your documents to create your first project and get started with AI analysis.'
-              }
-            </p>
-            {!searchTerm && (
-              <Button
-                onClick={() => router.push('/upload')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Upload Documents
-              </Button>
-            )}
+            <div className="max-w-md mx-auto">
+              <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FolderPlus className="w-12 h-12 text-blue-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                {searchTerm ? 'No projects found' : 'Ready to get started?'}
+              </h3>
+              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+                {searchTerm
+                  ? 'Try adjusting your search terms or create a new project by uploading documents.'
+                  : 'Upload your planset and utility bill documents to create your first project and unlock AI-powered permit assistance.'
+                }
+              </p>
+              {!searchTerm && (
+                <div className="space-y-4">
+                  <Button
+                    onClick={() => router.push('/upload')}
+                    className="bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 hover:from-blue-600 hover:via-purple-600 hover:to-green-600 text-white px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  >
+                    <Upload className="w-5 h-5 mr-2" />
+                    Upload Your First Documents
+                  </Button>
+                  <div className="flex items-center justify-center space-x-6 text-sm text-gray-500 mt-6">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>PDF & Images</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Zap className="w-4 h-4" />
+                      <span>AI Analysis</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 

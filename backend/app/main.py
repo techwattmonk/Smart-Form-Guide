@@ -20,6 +20,7 @@ from app.services.project_service import ProjectService
 
 from app.services.hometown import get_jurisdiction
 from app.services.google_sheets import get_google_sheet_data
+from app.utils.image_processing import process_image_file, is_image_file, validate_image_file
 
 # --- Config ---
 # Google Sheet Configuration
@@ -104,6 +105,81 @@ def extract_text_from_pdf(pdf_file: UploadFile) -> str:
         text += page.get_text()
     return text
 
+def extract_text_from_file(file: UploadFile) -> dict:
+    """
+    Extract text from either PDF or image file
+    Returns a dictionary with extracted text and metadata
+    """
+    try:
+        # Read file content
+        file_content = file.file.read()
+
+        # Check if it's an image file
+        if is_image_file(file.filename):
+            print(f"📸 Processing image file: {file.filename}")
+
+            # Validate image file
+            validation = validate_image_file(file_content)
+            if not validation["valid"]:
+                return {
+                    "text": "",
+                    "error": validation["error"],
+                    "file_type": "image",
+                    "success": False
+                }
+
+            # Process image with Gemini Vision
+            image_result = process_image_file(file_content, file.filename)
+
+            return {
+                "text": image_result.get("extracted_text", ""),
+                "structured_data": image_result.get("structured_data", {}),
+                "customer_address": image_result.get("customer_address", ""),
+                "billing_period": image_result.get("billing_period", ""),
+                "energy_consumption": image_result.get("energy_consumption", ""),
+                "account_number": image_result.get("account_number", ""),
+                "utility_company": image_result.get("utility_company", ""),
+                "file_type": "image",
+                "success": image_result.get("success", False),
+                "error": image_result.get("error", None)
+            }
+        else:
+            # Process as PDF
+            print(f"📄 Processing PDF file: {file.filename}")
+
+            # Reset file pointer
+            file.file.seek(0)
+
+            # Extract text using existing PDF function
+            text = extract_text_from_pdf(file)
+
+            return {
+                "text": text,
+                "structured_data": {},
+                "customer_address": "",
+                "billing_period": "",
+                "energy_consumption": "",
+                "account_number": "",
+                "utility_company": "",
+                "file_type": "pdf",
+                "success": True,
+                "error": None
+            }
+
+    except Exception as e:
+        return {
+            "text": "",
+            "structured_data": {},
+            "customer_address": "",
+            "billing_period": "",
+            "energy_consumption": "",
+            "account_number": "",
+            "utility_company": "",
+            "file_type": "unknown",
+            "success": False,
+            "error": f"Failed to process file: {str(e)}"
+        }
+
 def store_in_chroma(text: str, source_name: str):
     # create embedding
     vector = embed_model.encode(text).tolist()
@@ -123,10 +199,43 @@ def query_gemini(prompt: str, model_name: str = "gemini-2.0-flash") -> str:
     return response.text
 
 def extract_first_page_text_fitz(pdf_file: UploadFile) -> str:
+    """
+    Enhanced PDF text extraction for planset documents
+    Handles multiple text orientations and layouts
+    """
     doc = fitz.open(stream=pdf_file.file.read(), filetype="pdf")
     text = ""
     if doc.page_count > 0:
-        text = doc.load_page(0).get_text()
+        page = doc.load_page(0)
+
+        # Extract text with different methods to catch rotated/positioned text
+        # Method 1: Standard text extraction
+        standard_text = page.get_text()
+
+        # Method 2: Extract text blocks with position info
+        text_blocks = page.get_text("dict")
+        block_texts = []
+
+        for block in text_blocks.get("blocks", []):
+            if "lines" in block:
+                for line in block["lines"]:
+                    for span in line.get("spans", []):
+                        if span.get("text", "").strip():
+                            block_texts.append(span["text"].strip())
+
+        # Combine all extracted text
+        all_text = standard_text + "\n" + "\n".join(block_texts)
+
+        # Clean up the text
+        lines = all_text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            line = line.strip()
+            if line and len(line) > 2:  # Filter out very short lines
+                cleaned_lines.append(line)
+
+        text = "\n".join(cleaned_lines)
+
     doc.close()
     return text
 
@@ -252,19 +361,84 @@ async def upload_pdfs(
     current_user: UserInDB = Depends(get_current_user)
 ):
     """
-    Upload two PDFs, extract text, create embeddings in Chroma,
+    Upload planset PDF and utility bill (PDF or image), extract text, create embeddings in Chroma,
     and extract specified keys from the combined text using Gemini.
     """
-    # Pre-step: Extract text from PDF2's first page and get customer address
+    # 🏠 IMPROVED: Extract customer address from planset first (more reliable than utility bills)
+    print("🏠 Extracting customer address from planset (primary source)...")
+
+    # Extract text from planset first page
     first_page_text_pdf1 = extract_first_page_text_fitz(pdf1)
-    
-    address_prompt = f"""
-    Extract the customer address from the following text. If no address is found, return "N/A".
-    Text:
+
+    # Enhanced prompt for planset address extraction
+    planset_address_prompt = f"""
+    Extract the CUSTOMER/PROPERTY address from this solar planset document.
+
+    This is a solar installation planset. Look specifically for:
+    - "RESIDENCE LOCATED AT" followed by an address
+    - "PROPERTY ADDRESS" or "CUSTOMER ADDRESS"
+    - Address in the project scope/description section
+    - Installation address or service address
+    - The address where the solar PV system will be installed
+
+    Common patterns in plansets:
+    - "TO INSTALL A ROOF MOUNTED SOLAR PHOTOVOLTAIC SYSTEM AT THE OWNER RESIDENCE LOCATED AT [ADDRESS]"
+    - Address may appear in the top section or side margins
+    - May be formatted across multiple lines
+
+    IGNORE these addresses:
+    - Contractor company addresses (like "FLO ENERGY" office address)
+    - Utility company addresses
+    - Engineering firm addresses
+    - Any business/corporate addresses
+
+    Return ONLY the complete customer property address in format: [Street Number] [Street Name], [City], [State] [ZIP]
+    If no customer address is found, return "N/A"
+
+    Planset Text:
     {first_page_text_pdf1}
     """
-    customer_address = query_gemini(address_prompt)
-    
+
+    customer_address = query_gemini(planset_address_prompt)
+    print(f"📋 Address extracted from planset: {customer_address}")
+
+    # Process utility bill for additional data (energy consumption, billing info, etc.)
+    print("📊 Processing utility bill for energy data...")
+    utility_result = extract_text_from_file(pdf2)
+
+    if not utility_result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to process utility bill: {utility_result.get('error', 'Unknown error')}"
+        )
+
+    # Validate planset address and use utility bill as fallback ONLY if planset extraction completely fails
+    if not customer_address or customer_address.strip().lower() in ["n/a", "", "not found"]:
+        print("⚠️ No valid address found in planset, trying utility bill as fallback...")
+
+        if utility_result["file_type"] == "image":
+            # For images, use the extracted address from Gemini Vision
+            customer_address = utility_result.get("customer_address", "N/A")
+            print(f"📸 Fallback address from utility image: {customer_address}")
+        else:
+            # For PDFs, extract address using text analysis
+            utility_text = utility_result["text"]
+            if utility_text.strip():
+                utility_address_prompt = f"""
+                Extract the customer service address or billing address from this utility bill text.
+                Look for the address where the service is provided, not the utility company's address.
+                Return only the complete address (street, city, state, ZIP) or "N/A" if not found.
+
+                Utility Bill Text:
+                {utility_text}
+                """
+                customer_address = query_gemini(utility_address_prompt)
+                print(f"📄 Fallback address from utility PDF: {customer_address}")
+    else:
+        print(f"✅ Using planset address (more reliable): {customer_address}")
+
+    print(f"🎯 Final customer address: {customer_address}")
+
     # Immediately pass the customer address to hometown.py
     jurisdiction_details = get_jurisdiction(customer_address)
 
@@ -452,10 +626,24 @@ async def upload_pdfs(
     # Reset pdf1 file pointer after reading its first page
     pdf1.file.seek(0)
 
-    # 1️⃣ Extract text from PDFs
-    text1 = extract_text_from_pdf(pdf1)
-    text2 = extract_text_from_pdf(pdf2)
+    # 1️⃣ Extract text from files (PDF for planset, utility bill already processed above)
+    text1 = extract_text_from_pdf(pdf1)  # Planset is always PDF
+
+    # Use the already processed utility bill result
+    text2 = utility_result["text"]
     full_text = text1 + "\n" + text2
+
+    # Log utility bill processing results (already processed above)
+    print(f"📋 Final processing summary:")
+    print(f"   - Planset text length: {len(text1)} characters")
+    print(f"   - Utility bill text length: {len(text2)} characters")
+    print(f"   - Customer address used: {customer_address}")
+    if utility_result["file_type"] == "image":
+        print(f"   - Image processing results:")
+        print(f"     • Customer Address: {utility_result.get('customer_address', 'N/A')}")
+        print(f"     • Energy Consumption: {utility_result.get('energy_consumption', 'N/A')}")
+        print(f"     • Billing Period: {utility_result.get('billing_period', 'N/A')}")
+        print(f"     • Utility Company: {utility_result.get('utility_company', 'N/A')}")
 
     # 2️⃣ Store embeddings in Chroma
     store_in_chroma(text1, "pdf1")

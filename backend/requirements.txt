@@ -19,6 +19,8 @@ transformers==4.40.0
 huggingface-hub==0.23.0
 chromadb==0.4.15
 google-genai
+google-generativeai==0.8.5
 python-dotenv==1.0.0
 numpy<2.0
 gspread==5.12.2
+Pillow==10.1.0

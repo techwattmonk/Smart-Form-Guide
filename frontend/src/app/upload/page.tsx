@@ -251,7 +251,7 @@ export default function CombinedUploadPage() {
                   <div className="space-y-2">
                     <Label htmlFor="utility" className="text-sm font-medium text-gray-700 flex items-center space-x-2">
                       <Zap className="w-4 h-4 text-green-600" />
-                      <span>Utility Bill PDF File (Required - Upload Second)</span>
+                      <span>Utility Bill (PDF or Image) (Required - Upload Second)</span>
                     </Label>
                     <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors bg-green-50/50">
                       {!utilityFile ? (
@@ -259,25 +259,36 @@ export default function CombinedUploadPage() {
                           <Input
                             id="utility"
                             type="file"
-                            accept=".pdf"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tiff"
                             onChange={(e) => handleUtilityFileChange(e.target.files?.[0] || null)}
                             className="hidden"
                           />
                           <label htmlFor="utility" className="cursor-pointer">
                             <Zap className="w-10 h-10 text-green-400 mx-auto mb-3" />
                             <p className="text-lg text-gray-600 mb-2">
-                              Click to upload utility bill PDF
+                              Click to upload utility bill
                             </p>
                             <p className="text-sm text-gray-500">
-                              Utility bills for energy analysis
+                              PDF, JPG, PNG, or other image formats supported
                             </p>
+                            <div className="flex items-center justify-center space-x-4 mt-3 text-xs text-gray-400">
+                              <span className="bg-blue-100 text-blue-600 px-2 py-1 rounded">PDF</span>
+                              <span className="bg-green-100 text-green-600 px-2 py-1 rounded">JPG</span>
+                              <span className="bg-purple-100 text-purple-600 px-2 py-1 rounded">PNG</span>
+                              <span className="bg-orange-100 text-orange-600 px-2 py-1 rounded">WEBP</span>
+                            </div>
                           </label>
                         </>
                       ) : (
                         <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
                           <div className="flex items-center space-x-3">
                             <Zap className="w-5 h-5 text-green-600" />
-                            <span className="text-sm font-medium text-gray-700">{utilityFile.name}</span>
+                            <div className="flex flex-col items-start">
+                              <span className="text-sm font-medium text-gray-700">{utilityFile.name}</span>
+                              <span className="text-xs text-gray-500">
+                                {utilityFile.type.startsWith('image/') ? 'Image File' : 'PDF File'} • {(utilityFile.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                            </div>
                           </div>
                           <Button
                             variant="ghost"
