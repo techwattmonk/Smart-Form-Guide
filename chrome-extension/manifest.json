@@ -17,7 +17,11 @@
     "http://localhost:8000/*",
     "https://*.gov/*",
     "https://*.accela.com/*",
-    "https://*.permitflow.com/*"
+    "https://*.permitflow.com/*",
+    "https://*.pge.com/*",
+    "https://*.pgecorp.com/*",
+    "file:///*",
+    "<all_urls>"
   ],
 
   "background": {
@@ -29,7 +33,12 @@
       "matches": [
         "https://*.gov/*",
         "https://*.accela.com/*",
-        "https://*.permitflow.com/*"
+        "https://*.permitflow.com/*",
+        "https://*.pge.com/*",
+        "https://*.pgecorp.com/*",
+        "file:///*",
+        "http://*/*",
+        "https://*/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

@@ -3,12 +3,26 @@ from typing import List, Optional
 from datetime import datetime
 import os
 import uuid
+import fitz  # PyMuPDF for text extraction
 from app.routers.auth import get_current_user
 from app.models.user import UserInDB
 from app.models.project import ProjectCreate, ProjectUpdate, Project, DocumentCreate, DocumentType
 from app.services.project_service import project_service
 
 router = APIRouter()
+
+def extract_text_from_pdf(pdf_file: UploadFile) -> str:
+    """Extract text from PDF file"""
+    try:
+        doc = fitz.open(stream=pdf_file.file.read(), filetype="pdf")
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return ""
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_project(
@@ -177,17 +191,24 @@ async def upload_documents_to_project(
         planset_filename = f"{uuid.uuid4()}_{pdf1.filename}"
         planset_path = os.path.join(upload_dir, planset_filename)
 
+        # Extract text from planset before saving
+        pdf1.file.seek(0)  # Reset file pointer
+        planset_text = extract_text_from_pdf(pdf1)
+
+        # Reset file pointer again for saving
+        pdf1.file.seek(0)
         with open(planset_path, "wb") as buffer:
             planset_content = await pdf1.read()
             buffer.write(planset_content)
 
-        # Add planset as embedded document
+        # Add planset as embedded document with extracted text
         planset_success = await project_service.add_embedded_document(
             project_id=project_id,
             owner_id=str(current_user.id),
             document_type=DocumentType.PLANSET,
             filename=pdf1.filename,
-            file_path=planset_path
+            file_path=planset_path,
+            extracted_text=planset_text
         )
 
         if planset_success:
@@ -201,17 +222,24 @@ async def upload_documents_to_project(
         utility_filename = f"{uuid.uuid4()}_{pdf2.filename}"
         utility_path = os.path.join(upload_dir, utility_filename)
 
+        # Extract text from utility bill before saving
+        pdf2.file.seek(0)  # Reset file pointer
+        utility_text = extract_text_from_pdf(pdf2)
+
+        # Reset file pointer again for saving
+        pdf2.file.seek(0)
         with open(utility_path, "wb") as buffer:
             utility_content = await pdf2.read()
             buffer.write(utility_content)
 
-        # Add utility bill as embedded document
+        # Add utility bill as embedded document with extracted text
         utility_success = await project_service.add_embedded_document(
             project_id=project_id,
             owner_id=str(current_user.id),
             document_type=DocumentType.UTILITY_BILL,
             filename=pdf2.filename,
-            file_path=utility_path
+            file_path=utility_path,
+            extracted_text=utility_text
         )
 
         if utility_success:
@@ -277,4 +305,61 @@ async def get_project_documents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get project documents: {str(e)}"
+        )
+
+@router.get("/{project_id}/extracted-text")
+async def get_project_extracted_text(
+    project_id: str,
+    current_user: UserInDB = Depends(get_current_user)
+):
+    """Get extracted text from all documents in a project for form auto-fill"""
+    try:
+        # Verify project exists and belongs to user
+        project = await project_service.get_project_by_id(project_id, str(current_user.id))
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+
+        # Get all documents for the project
+        documents = await project_service.get_project_documents(project_id, str(current_user.id))
+
+        # Initialize response data
+        extracted_data = {
+            "planset_text": "",
+            "utility_text": "",
+            "customer_address": "",
+            "energy_consumption": "",
+            "utility_company": "",
+            "account_number": "",
+            "billing_period": ""
+        }
+
+        # Extract text from documents
+        for doc in documents:
+            if doc.document_type == "planset" and doc.extracted_text:
+                extracted_data["planset_text"] = doc.extracted_text
+                if doc.customer_address:
+                    extracted_data["customer_address"] = doc.customer_address
+
+            elif doc.document_type == "utility_bill" and doc.extracted_text:
+                extracted_data["utility_text"] = doc.extracted_text
+
+                # Extract utility-specific data from analysis results
+                if doc.analysis_results:
+                    analysis = doc.analysis_results
+                    extracted_data["energy_consumption"] = analysis.get("energy_consumption", "")
+                    extracted_data["utility_company"] = analysis.get("utility_company", "")
+                    extracted_data["account_number"] = analysis.get("account_number", "")
+                    extracted_data["billing_period"] = analysis.get("billing_period", "")
+
+        return extracted_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get extracted text: {str(e)}"
         )

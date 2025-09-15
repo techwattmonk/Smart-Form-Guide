@@ -546,6 +546,17 @@ async def upload_pdfs(
             }
         project_id = None
 
+    # Reset pdf1 file pointer for text extraction
+    pdf1.file.seek(0)
+
+    # 1️⃣ Extract text from planset PDF first
+    text1 = extract_text_from_pdf(pdf1)  # Planset is always PDF
+    print(f"📄 Extracted planset text: {len(text1)} characters")
+
+    # 2️⃣ Get utility bill text from already processed result
+    text2 = utility_result["text"]
+    print(f"📄 Extracted utility bill text: {len(text2)} characters")
+
     # 🚀 IMPORTANT: Save PDFs as embedded documents in the project
     documents_saved = []
     if project_id:
@@ -567,13 +578,15 @@ async def upload_pdfs(
             planset_content = await pdf1.read()
             buffer.write(planset_content)
 
-        # Add planset as embedded document
+        # Add planset as embedded document with extracted text
         planset_success = await project_service.add_embedded_document(
             project_id=project_id,
             owner_id=str(current_user.id),
             document_type=DocumentType.PLANSET,
             filename=pdf1.filename,
-            file_path=planset_path
+            file_path=planset_path,
+            extracted_text=text1,  # Save extracted planset text
+            customer_address=customer_address  # Save extracted address
         )
 
         if planset_success:
@@ -592,13 +605,15 @@ async def upload_pdfs(
             utility_content = await pdf2.read()
             buffer.write(utility_content)
 
-        # Add utility bill as embedded document
+        # Add utility bill as embedded document with extracted text
         utility_success = await project_service.add_embedded_document(
             project_id=project_id,
             owner_id=str(current_user.id),
             document_type=DocumentType.UTILITY_BILL,
             filename=pdf2.filename,
-            file_path=utility_path
+            file_path=utility_path,
+            extracted_text=text2,  # Save extracted utility bill text
+            analysis_results=utility_result  # Save utility analysis results
         )
 
         if utility_success:
@@ -623,14 +638,7 @@ async def upload_pdfs(
             "excel_smart_guidance_flow": excel_guidance_result.get("smart_guidance_flow"),
         }
 
-    # Reset pdf1 file pointer after reading its first page
-    pdf1.file.seek(0)
-
-    # 1️⃣ Extract text from files (PDF for planset, utility bill already processed above)
-    text1 = extract_text_from_pdf(pdf1)  # Planset is always PDF
-
-    # Use the already processed utility bill result
-    text2 = utility_result["text"]
+    # Combine extracted texts for LLM processing
     full_text = text1 + "\n" + text2
 
     # Log utility bill processing results (already processed above)

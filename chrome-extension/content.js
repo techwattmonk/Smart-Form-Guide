@@ -3,9 +3,8 @@ class FormAssistant {
     constructor() {
         this.detectedFields = [];
         this.selectedProject = null;
-        this.floatingPanel = null;
         this.isActive = false;
-        
+
         this.init();
     }
 
@@ -21,10 +20,7 @@ class FormAssistant {
             
             // Start form detection
             this.detectForms();
-            
-            // Create floating panel
-            this.createFloatingPanel();
-            
+
             // Monitor for dynamic content
             this.startMutationObserver();
         }
@@ -44,6 +40,8 @@ class FormAssistant {
 
     isPermitWebsite() {
         const hostname = window.location.hostname.toLowerCase();
+        const url = window.location.href.toLowerCase();
+
         const permitIndicators = [
             '.gov',
             'accela.com',
@@ -51,29 +49,64 @@ class FormAssistant {
             'permits',
             'building',
             'planning',
-            'development'
+            'development',
+            'pge.com',
+            'pgecorp.com',
+            'utility',
+            'solar',
+            'interconnection',
+            'application',
+            'form',
+            'project'
         ];
-        
-        return permitIndicators.some(indicator => hostname.includes(indicator));
+
+        // Check hostname and URL for permit/form indicators
+        const isPermitSite = permitIndicators.some(indicator =>
+            hostname.includes(indicator) || url.includes(indicator)
+        );
+
+        // Also check if page has form elements (broader detection)
+        const hasFormElements = document.querySelectorAll('form, input, select, textarea').length > 0;
+
+        return isPermitSite || hasFormElements;
     }
 
     detectForms() {
+        // Clear previous detections
+        this.detectedFields = [];
+
         // Find all forms on the page
         const forms = document.querySelectorAll('form');
         console.log(`📋 Found ${forms.length} forms on page`);
-        
+
         forms.forEach((form, index) => {
             this.analyzeForm(form, index);
         });
-        
+
         // Also detect standalone input fields (not in forms)
         this.detectStandaloneFields();
-        
+
+        // Detect fields in common containers (divs, sections, etc.)
+        this.detectFieldsInContainers();
+
         console.log(`🎯 Total detected fields: ${this.detectedFields.length}`);
-        
-        if (this.detectedFields.length > 0) {
-            this.updateFloatingPanel();
-        }
+
+        // Log detected fields for debugging
+        this.detectedFields.forEach((field, index) => {
+            console.log(`Field ${index + 1}:`, {
+                label: field.label,
+                type: field.type,
+                fieldType: field.fieldType,
+                confidence: field.confidence,
+                element: field.element
+            });
+        });
+
+        // Form detection completed
+        console.log(`🎯 Total detected fields: ${this.detectedFields.length}`);
+
+        // Send detection results to extension
+        this.sendDetectionResults();
     }
 
     analyzeForm(form, formIndex) {
@@ -88,8 +121,15 @@ class FormAssistant {
     }
 
     analyzeField(element, formIndex, inputIndex) {
-        // Skip hidden, submit, and button inputs
-        if (element.type === 'hidden' || element.type === 'submit' || element.type === 'button') {
+        // Skip hidden, submit, button, and image inputs
+        if (element.type === 'hidden' || element.type === 'submit' ||
+            element.type === 'button' || element.type === 'image' ||
+            element.type === 'reset' || element.disabled) {
+            return null;
+        }
+
+        // Skip if element is not visible
+        if (!this.isElementVisible(element)) {
             return null;
         }
 
@@ -104,7 +144,8 @@ class FormAssistant {
             value: element.value || '',
             required: element.required,
             fieldType: this.classifyField(element),
-            confidence: 0
+            confidence: 0,
+            xpath: this.getElementXPath(element)
         };
 
         // Calculate confidence score for auto-fill
@@ -113,18 +154,61 @@ class FormAssistant {
         return fieldInfo;
     }
 
+    isElementVisible(element) {
+        const style = window.getComputedStyle(element);
+        return style.display !== 'none' &&
+               style.visibility !== 'hidden' &&
+               style.opacity !== '0' &&
+               element.offsetWidth > 0 &&
+               element.offsetHeight > 0;
+    }
+
+    getElementXPath(element) {
+        if (element.id) {
+            return `//*[@id="${element.id}"]`;
+        }
+
+        const parts = [];
+        while (element && element.nodeType === Node.ELEMENT_NODE) {
+            let index = 0;
+            let hasFollowingSiblings = false;
+            let hasPrecedingSiblings = false;
+
+            for (let sibling = element.previousSibling; sibling; sibling = sibling.previousSibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
+                    hasPrecedingSiblings = true;
+                    index++;
+                }
+            }
+
+            for (let sibling = element.nextSibling; sibling && !hasFollowingSiblings; sibling = sibling.nextSibling) {
+                if (sibling.nodeType === Node.ELEMENT_NODE && sibling.nodeName === element.nodeName) {
+                    hasFollowingSiblings = true;
+                }
+            }
+
+            const tagName = element.nodeName.toLowerCase();
+            const pathIndex = (hasPrecedingSiblings || hasFollowingSiblings) ? `[${index + 1}]` : '';
+            parts.splice(0, 0, tagName + pathIndex);
+
+            element = element.parentNode;
+        }
+
+        return parts.length ? '/' + parts.join('/') : '';
+    }
+
     getFieldLabel(element) {
         // Try to find associated label
         let label = '';
-        
-        // Check for label element
+
+        // Check for label element by 'for' attribute
         if (element.id) {
             const labelElement = document.querySelector(`label[for="${element.id}"]`);
             if (labelElement) {
                 label = labelElement.textContent.trim();
             }
         }
-        
+
         // Check for parent label
         if (!label) {
             const parentLabel = element.closest('label');
@@ -132,51 +216,112 @@ class FormAssistant {
                 label = parentLabel.textContent.replace(element.value, '').trim();
             }
         }
-        
-        // Check for nearby text
-        if (!label) {
-            const parent = element.parentElement;
-            if (parent) {
-                const textNodes = Array.from(parent.childNodes)
-                    .filter(node => node.nodeType === Node.TEXT_NODE)
-                    .map(node => node.textContent.trim())
-                    .filter(text => text.length > 0);
-                
-                if (textNodes.length > 0) {
-                    label = textNodes[0];
-                }
+
+        // Check for aria-label
+        if (!label && element.getAttribute('aria-label')) {
+            label = element.getAttribute('aria-label').trim();
+        }
+
+        // Check for aria-labelledby
+        if (!label && element.getAttribute('aria-labelledby')) {
+            const labelId = element.getAttribute('aria-labelledby');
+            const labelElement = document.getElementById(labelId);
+            if (labelElement) {
+                label = labelElement.textContent.trim();
             }
         }
-        
+
+        // Check for nearby text in various patterns
+        if (!label) {
+            label = this.findNearbyLabel(element);
+        }
+
+        // Clean up the label
+        if (label) {
+            label = label.replace(/[*:]+$/, '').trim(); // Remove trailing asterisks and colons
+            label = label.replace(/\s+/g, ' '); // Normalize whitespace
+        }
+
         return label;
+    }
+
+    findNearbyLabel(element) {
+        // Check previous sibling elements for labels
+        let sibling = element.previousElementSibling;
+        while (sibling) {
+            const text = sibling.textContent.trim();
+            if (text && text.length > 0 && text.length < 100) {
+                return text;
+            }
+            sibling = sibling.previousElementSibling;
+        }
+
+        // Check parent's previous sibling
+        const parent = element.parentElement;
+        if (parent) {
+            sibling = parent.previousElementSibling;
+            if (sibling) {
+                const text = sibling.textContent.trim();
+                if (text && text.length > 0 && text.length < 100) {
+                    return text;
+                }
+            }
+
+            // Check for text nodes in parent
+            const textNodes = Array.from(parent.childNodes)
+                .filter(node => node.nodeType === Node.TEXT_NODE)
+                .map(node => node.textContent.trim())
+                .filter(text => text.length > 0 && text.length < 100);
+
+            if (textNodes.length > 0) {
+                return textNodes[0];
+            }
+        }
+
+        return '';
     }
 
     classifyField(element) {
         const text = (element.name + ' ' + element.id + ' ' + element.placeholder + ' ' + this.getFieldLabel(element)).toLowerCase();
-        
-        // Common field types for permit applications
+
+        // Check input type first
+        if (element.type === 'email') return 'email';
+        if (element.type === 'tel') return 'phone';
+        if (element.type === 'date') return 'date';
+        if (element.type === 'number') return 'number';
+        if (element.type === 'url') return 'url';
+
+        // Common field types for permit applications and general forms
         const fieldTypes = {
-            'name': ['name', 'applicant', 'owner', 'contractor'],
-            'email': ['email', 'e-mail'],
-            'phone': ['phone', 'telephone', 'mobile', 'cell'],
-            'address': ['address', 'street', 'location'],
-            'city': ['city', 'municipality'],
-            'state': ['state', 'province'],
-            'zip': ['zip', 'postal', 'zipcode'],
-            'date': ['date', 'when', 'time'],
-            'description': ['description', 'details', 'notes', 'comments'],
-            'value': ['value', 'cost', 'amount', 'price', '$'],
-            'area': ['area', 'square', 'sqft', 'size'],
-            'permit_type': ['permit', 'type', 'category'],
-            'project_description': ['project', 'work', 'scope']
+            'name': ['name', 'applicant', 'owner', 'contractor', 'first', 'last', 'full'],
+            'email': ['email', 'e-mail', 'mail'],
+            'phone': ['phone', 'telephone', 'mobile', 'cell', 'tel'],
+            'address': ['address', 'street', 'location', 'addr'],
+            'city': ['city', 'municipality', 'town'],
+            'state': ['state', 'province', 'region'],
+            'zip': ['zip', 'postal', 'zipcode', 'postcode'],
+            'date': ['date', 'when', 'time', 'birth', 'dob'],
+            'description': ['description', 'details', 'notes', 'comments', 'message'],
+            'value': ['value', 'cost', 'amount', 'price', '$', 'fee'],
+            'area': ['area', 'square', 'sqft', 'size', 'footage'],
+            'permit_type': ['permit', 'type', 'category', 'kind'],
+            'project_description': ['project', 'work', 'scope', 'construction'],
+            'company': ['company', 'business', 'organization', 'firm'],
+            'title': ['title', 'position', 'job'],
+            'website': ['website', 'url', 'site', 'web'],
+            'password': ['password', 'pass', 'pwd'],
+            'username': ['username', 'user', 'login'],
+            'number': ['number', 'num', 'id', 'reference'],
+            'checkbox': ['agree', 'accept', 'confirm', 'check'],
+            'radio': ['select', 'choose', 'option']
         };
-        
+
         for (const [type, keywords] of Object.entries(fieldTypes)) {
             if (keywords.some(keyword => text.includes(keyword))) {
                 return type;
             }
         }
-        
+
         return 'unknown';
     }
 
@@ -204,7 +349,7 @@ class FormAssistant {
     detectStandaloneFields() {
         // Detect input fields that are not inside forms
         const standaloneInputs = document.querySelectorAll('input:not(form input), select:not(form select), textarea:not(form textarea)');
-        
+
         standaloneInputs.forEach((input, index) => {
             const fieldInfo = this.analyzeField(input, -1, index);
             if (fieldInfo) {
@@ -213,116 +358,52 @@ class FormAssistant {
         });
     }
 
-    createFloatingPanel() {
-        // Create floating assistance panel
-        this.floatingPanel = document.createElement('div');
-        this.floatingPanel.id = 'smart-form-guide-panel';
-        this.floatingPanel.innerHTML = `
-            <div class="sfg-panel-header">
-                <div class="sfg-logo">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 12l2 2 4-4"></path>
-                        <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"></path>
-                        <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"></path>
-                    </svg>
-                    <span>Smart Form Guide</span>
-                </div>
-                <button class="sfg-close-btn" id="sfg-close">×</button>
-            </div>
-            <div class="sfg-panel-content">
-                <div class="sfg-status">
-                    <div class="sfg-status-dot scanning"></div>
-                    <span>Scanning for form fields...</span>
-                </div>
-                <div class="sfg-fields-info" id="sfg-fields-info" style="display: none;">
-                    <p class="sfg-fields-count">Found <span id="sfg-count">0</span> fillable fields</p>
-                    <button class="sfg-auto-fill-btn" id="sfg-auto-fill" disabled>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20,6 9,17 4,12"></polyline>
-                        </svg>
-                        Auto-fill Fields
-                    </button>
-                </div>
-                <div class="sfg-no-project" id="sfg-no-project" style="display: none;">
-                    <p>Select a project in the extension popup to enable auto-fill</p>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(this.floatingPanel);
-        
-        // Add event listeners
-        document.getElementById('sfg-close').addEventListener('click', () => {
-            this.floatingPanel.style.display = 'none';
+    detectFieldsInContainers() {
+        // Look for form-like containers that might not use <form> tags
+        const containers = document.querySelectorAll('div[class*="form"], div[class*="input"], section[class*="form"], .form-container, .input-container, .field-container');
+
+        containers.forEach((container, containerIndex) => {
+            const inputs = container.querySelectorAll('input, select, textarea');
+            inputs.forEach((input, inputIndex) => {
+                // Skip if already detected
+                if (!this.detectedFields.some(field => field.element === input)) {
+                    const fieldInfo = this.analyzeField(input, `container_${containerIndex}`, inputIndex);
+                    if (fieldInfo) {
+                        this.detectedFields.push(fieldInfo);
+                    }
+                }
+            });
         });
-        
-        document.getElementById('sfg-auto-fill').addEventListener('click', () => {
-            this.autoFillFields();
-        });
-        
-        // Make panel draggable
-        this.makePanelDraggable();
     }
 
-    updateFloatingPanel() {
-        if (!this.floatingPanel) return;
-        
-        const statusElement = this.floatingPanel.querySelector('.sfg-status');
-        const fieldsInfo = document.getElementById('sfg-fields-info');
-        const noProject = document.getElementById('sfg-no-project');
-        const countElement = document.getElementById('sfg-count');
-        const autoFillBtn = document.getElementById('sfg-auto-fill');
-        
-        if (this.detectedFields.length > 0) {
-            statusElement.style.display = 'none';
-            
-            if (this.selectedProject) {
-                fieldsInfo.style.display = 'block';
-                noProject.style.display = 'none';
-                countElement.textContent = this.detectedFields.length;
-                autoFillBtn.disabled = false;
-            } else {
-                fieldsInfo.style.display = 'none';
-                noProject.style.display = 'block';
-            }
+    sendDetectionResults() {
+        // Send results to extension popup/sidebar
+        const results = {
+            fieldsCount: this.detectedFields.length,
+            fields: this.detectedFields.map(field => ({
+                id: field.id,
+                name: field.name,
+                type: field.type,
+                label: field.label,
+                fieldType: field.fieldType,
+                confidence: field.confidence,
+                required: field.required,
+                xpath: field.xpath
+            }))
+        };
+
+        // Store in chrome storage for popup access
+        if (chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({
+                detectedFields: results,
+                lastDetectionTime: Date.now()
+            });
         }
+
+        console.log('📤 Detection results sent:', results);
     }
 
-    makePanelDraggable() {
-        const header = this.floatingPanel.querySelector('.sfg-panel-header');
-        let isDragging = false;
-        let currentX;
-        let currentY;
-        let initialX;
-        let initialY;
-        let xOffset = 0;
-        let yOffset = 0;
 
-        header.addEventListener('mousedown', (e) => {
-            initialX = e.clientX - xOffset;
-            initialY = e.clientY - yOffset;
-            
-            if (e.target === header || header.contains(e.target)) {
-                isDragging = true;
-            }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                e.preventDefault();
-                currentX = e.clientX - initialX;
-                currentY = e.clientY - initialY;
-                xOffset = currentX;
-                yOffset = currentY;
-                
-                this.floatingPanel.style.transform = `translate(${currentX}px, ${currentY}px)`;
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-    }
 
     autoFillFields() {
         console.log('🚀 Starting auto-fill process...');
@@ -406,11 +487,53 @@ class FormAssistant {
     }
 }
 
+// Global form assistant instance
+let formAssistantInstance = null;
+
 // Initialize form assistant when page loads
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        new FormAssistant();
+        formAssistantInstance = new FormAssistant();
     });
 } else {
-    new FormAssistant();
+    formAssistantInstance = new FormAssistant();
 }
+
+// Listen for messages from extension
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'detectForms') {
+        console.log('🔍 Manual form detection requested');
+        if (formAssistantInstance) {
+            formAssistantInstance.detectForms();
+            sendResponse({
+                success: true,
+                fieldsCount: formAssistantInstance.detectedFields.length
+            });
+        } else {
+            sendResponse({ success: false, error: 'Form assistant not initialized' });
+        }
+        return true; // Keep message channel open for async response
+    }
+
+    if (request.action === 'getDetectedFields') {
+        if (formAssistantInstance) {
+            sendResponse({
+                success: true,
+                fields: formAssistantInstance.detectedFields
+            });
+        } else {
+            sendResponse({ success: false, error: 'Form assistant not initialized' });
+        }
+        return true;
+    }
+
+    if (request.action === 'highlightFields') {
+        if (formAssistantInstance) {
+            formAssistantInstance.highlightFillableFields();
+            sendResponse({ success: true });
+        } else {
+            sendResponse({ success: false, error: 'Form assistant not initialized' });
+        }
+        return true;
+    }
+});

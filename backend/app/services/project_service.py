@@ -218,8 +218,10 @@ class ProjectService:
     # Embedded document management methods
     async def add_embedded_document(self, project_id: str, owner_id: str,
                                   document_type: DocumentType, filename: str,
-                                  file_path: str) -> bool:
-        """Add an embedded document (planset or utility bill) to a project"""
+                                  file_path: str, extracted_text: str = None,
+                                  customer_address: str = None,
+                                  analysis_results: dict = None) -> bool:
+        """Add an embedded document (planset or utility bill) to a project with extracted data"""
         db = await get_database()
 
         # Verify the project belongs to the user
@@ -248,6 +250,25 @@ class ProjectService:
                 }
             }
         )
+
+        # Also create a legacy document entry with extracted text for compatibility
+        if result.modified_count > 0 and extracted_text:
+            document_data = {
+                "filename": filename,
+                "document_type": document_type,
+                "file_size": 0,  # We don't have file size here
+                "content_type": "application/pdf",
+                "project_id": ObjectId(project_id),
+                "owner_id": ObjectId(owner_id),
+                "file_path": file_path,
+                "uploaded_at": datetime.utcnow(),
+                "extracted_text": extracted_text,
+                "analysis_results": analysis_results,
+                "customer_address": customer_address,
+                "jurisdiction_details": None
+            }
+
+            await db[self.documents_collection_name].insert_one(document_data)
 
         # Update document count after successful update
         if result.modified_count > 0:
