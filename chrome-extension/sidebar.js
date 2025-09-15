@@ -40,30 +40,13 @@ class SmartFormGuideSidebar {
             clearFormsBtn.addEventListener('click', () => this.clearForms());
         }
 
-        // Open dashboard
-        const dashboardButton = document.getElementById('openDashboard');
-        if (dashboardButton) {
-            dashboardButton.addEventListener('click', () => this.openDashboard());
-        }
 
-        // Help button
-        const helpButton = document.getElementById('helpButton');
-        if (helpButton) {
-            helpButton.addEventListener('click', () => this.showHelp());
-        }
     }
 
     showMainInterface() {
         console.log('🎯 Showing main interface');
-        
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const mainContent = document.getElementById('mainContent');
 
-        if (statusDot && statusText) {
-            statusDot.className = 'status-dot online';
-            statusText.textContent = 'Ready';
-        }
+        const mainContent = document.getElementById('mainContent');
 
         if (mainContent) {
             mainContent.style.display = 'flex';
@@ -72,15 +55,7 @@ class SmartFormGuideSidebar {
 
     startFormDetection() {
         console.log('🔍 Starting form detection...');
-        
-        const detectionDot = document.getElementById('detectionDot');
-        const detectionText = document.getElementById('detectionText');
-        
-        if (detectionDot && detectionText) {
-            detectionDot.className = 'status-dot scanning';
-            detectionText.textContent = 'Ready to scan';
-        }
-        
+
         // Auto-detect forms on page load
         setTimeout(() => {
             this.detectForms();
@@ -89,18 +64,10 @@ class SmartFormGuideSidebar {
 
     async detectForms() {
         console.log('🔍 Detecting forms on current page...');
-        
-        const detectionDot = document.getElementById('detectionDot');
-        const detectionText = document.getElementById('detectionText');
+
         const noForms = document.getElementById('noForms');
         const detectedForms = document.getElementById('detectedForms');
         const fillFormsBtn = document.getElementById('fillFormsBtn');
-
-        // Update status
-        if (detectionDot && detectionText) {
-            detectionDot.className = 'status-dot scanning';
-            detectionText.textContent = 'Scanning...';
-        }
 
         try {
             // Get current active tab
@@ -124,25 +91,19 @@ class SmartFormGuideSidebar {
                 
                 if (this.formFields.length > 0) {
                     // Forms found
-                    if (detectionDot && detectionText) {
-                        detectionDot.className = 'status-dot online';
-                        detectionText.textContent = `Found ${this.formFields.length} fields`;
-                    }
-                    
+                    console.log(`✅ Found ${this.formFields.length} form fields`);
+
                     if (noForms) noForms.style.display = 'none';
                     if (detectedForms) {
                         detectedForms.style.display = 'block';
                         this.renderFormFields();
                     }
                     if (fillFormsBtn) fillFormsBtn.disabled = false;
-                    
+
                 } else {
                     // No forms found
-                    if (detectionDot && detectionText) {
-                        detectionDot.className = 'status-dot offline';
-                        detectionText.textContent = 'No forms found';
-                    }
-                    
+                    console.log('ℹ️ No forms found on this page');
+
                     if (noForms) noForms.style.display = 'block';
                     if (detectedForms) detectedForms.style.display = 'none';
                     if (fillFormsBtn) fillFormsBtn.disabled = true;
@@ -151,11 +112,6 @@ class SmartFormGuideSidebar {
 
         } catch (error) {
             console.error('❌ Form detection failed:', error);
-            
-            if (detectionDot && detectionText) {
-                detectionDot.className = 'status-dot offline';
-                detectionText.textContent = 'Detection failed';
-            }
         }
     }
 
@@ -323,21 +279,7 @@ class SmartFormGuideSidebar {
         }
     }
 
-    openDashboard() {
-        if (chrome.tabs && chrome.tabs.create) {
-            chrome.tabs.create({ url: `${this.webAppUrl}/dashboard` });
-        } else {
-            window.open(`${this.webAppUrl}/dashboard`, '_blank');
-        }
-    }
 
-    showHelp() {
-        if (chrome.tabs && chrome.tabs.create) {
-            chrome.tabs.create({ url: `${this.webAppUrl}/help` });
-        } else {
-            window.open(`${this.webAppUrl}/help`, '_blank');
-        }
-    }
 }
 
 // Initialize sidebar when DOM loads
