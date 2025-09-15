@@ -174,10 +174,10 @@ export default function ExtensionWelcomePage() {
               Go to Dashboard
             </Button>
             <Button
-              onClick={() => router.push('/extension')}
+              onClick={() => window.open('/downloads/INSTALLATION_GUIDE.txt', '_blank')}
               className="bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-800"
             >
-              View Extension Guide
+              View Installation Guide
             </Button>
           </div>
         </motion.div>

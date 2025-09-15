@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, MapPin, FileText, MessageCircle, CheckCircle, Clock, AlertCircle, Chrome, Download, ExternalLink } from 'lucide-react';
+import { ArrowLeft, MapPin, FileText, MessageCircle, CheckCircle, Clock, AlertCircle, Chrome, Download } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface StepItem {
@@ -260,6 +260,27 @@ export default function StepsPage() {
     }
   };
 
+  const handleInstallExtension = () => {
+    // Create a ZIP file download of the extension
+    const extensionFiles = [
+      'manifest.json',
+      'sidebar.html',
+      'sidebar.js',
+      'sidebar.css',
+      'background.js',
+      'content.js',
+      'content.css',
+      'icons/'
+    ];
+
+    // For now, we'll redirect to Chrome Web Store or provide direct download
+    // Option 1: Direct download (when you host the ZIP file)
+    window.open('/downloads/smart-form-guide-extension.zip', '_blank');
+
+    // Option 2: Chrome Web Store (when extension is published)
+    // window.open('https://chrome.google.com/webstore/detail/smart-form-guide/YOUR_EXTENSION_ID', '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
       {/* Header */}
@@ -391,19 +412,11 @@ export default function StepsPage() {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Button
-                    onClick={() => router.push('/extension')}
+                    onClick={handleInstallExtension}
                     className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
                   >
                     <Download className="w-4 h-4" />
                     <span>Install Extension</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open('https://chrome.google.com/webstore', '_blank')}
-                    className="border-orange-200 text-orange-700 hover:bg-orange-50 px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>Learn More</span>
                   </Button>
                 </div>
               </div>
