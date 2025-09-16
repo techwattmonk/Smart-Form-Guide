@@ -1,4 +1,9 @@
 [
     "Customer Name",
-    "Customer Address"
+    "Customer Address",
+    "Customer City",
+    "Customer State",
+    "Customer ZIP Code",
+    "Customer Email",
+    "Customer Phone"
 ]
