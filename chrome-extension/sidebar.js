@@ -1,10 +1,16 @@
 // Smart Form Guide Chrome Extension - Sidebar Script (No Authentication)
 class SmartFormGuideSidebar {
     constructor() {
-        this.webAppUrl = 'http://localhost:3000';
+        this.webAppUrl = 'http://localhost:8000';
         this.detectedForms = [];
         this.formFields = [];
-        
+        this.analyzedFields = null;
+        this.selectedProject = null;
+        this.workflowState = {
+            fieldsAnalyzed: false,
+            projectSelected: false
+        };
+
         this.init();
     }
 
@@ -15,11 +21,8 @@ class SmartFormGuideSidebar {
         // Setup event listeners
         this.setupEventListeners();
 
-        // Show main interface immediately
-        this.showMainInterface();
-
-        // Start form detection
-        this.startFormDetection();
+        // Initialize workflow status
+        this.updateWorkflowStatus();
 
         console.log('✅ Sidebar initialization complete');
     }
@@ -27,46 +30,383 @@ class SmartFormGuideSidebar {
     setupEventListeners() {
         console.log('🔧 Setting up event listeners...');
 
-        // Form detection button
-        const detectFormsBtn = document.getElementById('detectFormsBtn');
-        if (detectFormsBtn) {
-            console.log('✅ Detect Forms button found, adding event listener');
-            detectFormsBtn.addEventListener('click', () => {
-                console.log('🖱️ Detect Forms button clicked!');
-                this.detectForms();
+        // Analyze Fields button
+        const analyzeFieldsBtn = document.getElementById('analyzeFieldsBtn');
+        if (analyzeFieldsBtn) {
+            console.log('✅ Analyze Fields button found, adding event listener');
+            analyzeFieldsBtn.addEventListener('click', () => {
+                console.log('🖱️ Analyze Fields button clicked!');
+                this.analyzeFields();
             });
         } else {
-            console.error('❌ Detect Forms button not found!');
+            console.error('❌ Analyze Fields button not found!');
         }
 
-        // Auto fill button
-        const fillFormsBtn = document.getElementById('fillFormsBtn');
-        if (fillFormsBtn) {
-            console.log('✅ Auto Fill button found, adding event listener');
-            fillFormsBtn.addEventListener('click', () => {
-                console.log('🖱️ Auto Fill button clicked!');
-                console.log('🔧 Button disabled state:', fillFormsBtn.disabled);
-                if (fillFormsBtn.disabled) {
-                    console.log('⚠️ Button is disabled, not executing auto-fill');
-                    alert('⚠️ Please click "Detect Forms" first to find form fields.');
-                    return;
+        // Select Project button
+        const selectProjectBtn = document.getElementById('selectProjectBtn');
+        if (selectProjectBtn) {
+            console.log('✅ Select Project button found, adding event listener');
+            selectProjectBtn.addEventListener('click', () => {
+                console.log('🖱️ Select Project button clicked!');
+                this.showProjectSelection();
+            });
+        } else {
+            console.error('❌ Select Project button not found!');
+        }
+
+        console.log('✅ Event listeners setup complete');
+    }
+
+    updateWorkflowStatus() {
+        // Update fields status
+        const fieldsStatus = document.getElementById('fieldsStatus');
+        const fieldsStatusIcon = document.getElementById('fieldsStatusIcon');
+        const fieldsStatusText = document.getElementById('fieldsStatusText');
+
+        if (this.workflowState.fieldsAnalyzed) {
+            fieldsStatus.classList.add('completed');
+            fieldsStatusText.textContent = `${this.analyzedFields?.length || 0} fields analyzed`;
+            fieldsStatusIcon.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            `;
+        } else {
+            fieldsStatus.classList.remove('completed');
+            fieldsStatusText.textContent = 'Fields not analyzed';
+            fieldsStatusIcon.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            `;
+        }
+
+        // Update project status
+        const projectStatus = document.getElementById('projectStatus');
+        const projectStatusIcon = document.getElementById('projectStatusIcon');
+        const projectStatusText = document.getElementById('projectStatusText');
+
+        if (this.workflowState.projectSelected) {
+            projectStatus.classList.add('completed');
+            projectStatusText.textContent = `Project: ${this.selectedProject?.name || 'Selected'}`;
+            projectStatusIcon.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 12l2 2 4-4"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            `;
+        } else {
+            projectStatus.classList.remove('completed');
+            projectStatusText.textContent = 'No project selected';
+            projectStatusIcon.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+            `;
+        }
+
+        // Update button states
+        const selectProjectBtn = document.getElementById('selectProjectBtn');
+        if (selectProjectBtn) {
+            selectProjectBtn.disabled = !this.workflowState.fieldsAnalyzed;
+        }
+    }
+
+    async analyzeFields() {
+        console.log('🔍 Starting field analysis...');
+
+        try {
+            // Get current tab
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs.length === 0) {
+                throw new Error('No active tab found');
+            }
+
+            // Detect forms using the existing logic
+            await this.detectForms();
+
+            if (this.formFields.length === 0) {
+                alert('No form fields detected on this page. Please navigate to a page with forms.');
+                return;
+            }
+
+            // Create field analysis JSON
+            const fieldAnalysis = {
+                url: tabs[0].url,
+                title: tabs[0].title,
+                timestamp: new Date().toISOString(),
+                fields: this.formFields.map(field => ({
+                    id: field.id,
+                    name: field.name,
+                    type: field.type,
+                    fieldType: field.fieldType,
+                    label: field.label,
+                    required: field.required,
+                    options: field.options || undefined,
+                    placeholder: field.placeholder,
+                    value: field.value
+                }))
+            };
+
+            // Store analysis results
+            this.analyzedFields = fieldAnalysis.fields;
+            this.workflowState.fieldsAnalyzed = true;
+
+            // Send to backend
+            await this.sendFieldAnalysisToBackend(fieldAnalysis);
+
+            // Update UI
+            this.updateWorkflowStatus();
+            this.showAnalysisResults();
+
+            console.log('✅ Field analysis complete:', fieldAnalysis);
+
+        } catch (error) {
+            console.error('❌ Field analysis failed:', error);
+            alert(`Field analysis failed: ${error.message}`);
+        }
+    }
+
+    async sendFieldAnalysisToBackend(fieldAnalysis) {
+        try {
+            const response = await fetch(`${this.webAppUrl}/api/analyze-fields`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(fieldAnalysis)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Field analysis sent to backend:', result);
+            return result;
+
+        } catch (error) {
+            console.error('❌ Failed to send field analysis to backend:', error);
+            // Don't throw error - continue with local functionality
+        }
+    }
+
+    showAnalysisResults() {
+        const resultsSection = document.getElementById('resultsSection');
+        const analysisResults = document.getElementById('analysisResults');
+        const fieldCount = document.getElementById('fieldCount');
+        const fieldsSummary = document.getElementById('fieldsSummary');
+
+        if (!resultsSection || !analysisResults) return;
+
+        // Show results section
+        resultsSection.style.display = 'block';
+        analysisResults.style.display = 'block';
+
+        // Update field count
+        if (fieldCount) {
+            fieldCount.textContent = `${this.analyzedFields.length} fields`;
+        }
+
+        // Create field type summary
+        const fieldTypes = {};
+        this.analyzedFields.forEach(field => {
+            const type = field.type === 'radio-group' ? 'Radio Group' :
+                        field.type === 'select' ? 'Dropdown' :
+                        field.type === 'textarea' ? 'Text Area' :
+                        field.type === 'email' ? 'Email' :
+                        field.type === 'tel' ? 'Phone' :
+                        field.type === 'date' ? 'Date' :
+                        field.type === 'checkbox' ? 'Checkbox' :
+                        'Text Input';
+
+            fieldTypes[type] = (fieldTypes[type] || 0) + 1;
+        });
+
+        // Render field summary
+        if (fieldsSummary) {
+            fieldsSummary.innerHTML = Object.entries(fieldTypes)
+                .map(([type, count]) => `
+                    <div class="field-type-summary">
+                        <span class="field-type-name">${type}</span>
+                        <span class="field-type-count">${count}</span>
+                    </div>
+                `).join('');
+        }
+    }
+
+    async showProjectSelection() {
+        console.log('📋 Showing project selection...');
+
+        try {
+            // Fetch projects from backend
+            const projects = await this.fetchProjects();
+
+            // Show project selection UI
+            const resultsSection = document.getElementById('resultsSection');
+            const projectSelection = document.getElementById('projectSelection');
+            const projectsList = document.getElementById('projectsList');
+
+            if (!resultsSection || !projectSelection || !projectsList) return;
+
+            resultsSection.style.display = 'block';
+            projectSelection.style.display = 'block';
+
+            // Render projects list
+            if (projects.length === 0) {
+                projectsList.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #64748b;">
+                        <p>No projects found.</p>
+                        <p>Please create a project in the web app first.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            projectsList.innerHTML = projects.map(project => `
+                <div class="project-item" data-project-id="${project.id}">
+                    <div class="project-name">${project.name}</div>
+                    <div class="project-details">
+                        Created: ${new Date(project.created_at).toLocaleDateString()}
+                        ${project.planset_text ? '• Has Planset' : ''}
+                        ${project.utility_bill_text ? '• Has Utility Bill' : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            // Add click handlers for project selection
+            projectsList.querySelectorAll('.project-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const projectId = item.dataset.projectId;
+                    const project = projects.find(p => p.id == projectId);
+                    this.selectProject(project);
+                });
+            });
+
+        } catch (error) {
+            console.error('❌ Failed to show project selection:', error);
+            alert(`Failed to load projects: ${error.message}`);
+        }
+    }
+
+    async fetchProjects() {
+        try {
+            const response = await fetch(`${this.webAppUrl}/api/projects`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const projects = await response.json();
+            console.log('✅ Projects fetched:', projects);
+            return projects;
+
+        } catch (error) {
+            console.error('❌ Failed to fetch projects:', error);
+            throw error;
+        }
+    }
+
+    selectProject(project) {
+        console.log('📋 Project selected:', project);
+
+        // Update selected project
+        this.selectedProject = project;
+        this.workflowState.projectSelected = true;
+
+        // Update UI
+        this.updateWorkflowStatus();
+
+        // Highlight selected project
+        document.querySelectorAll('.project-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        document.querySelector(`[data-project-id="${project.id}"]`).classList.add('selected');
+
+        // Start auto-fill process
+        this.startAutoFill();
+    }
+
+    async startAutoFill() {
+        console.log('🚀 Starting auto-fill process...');
+
+        try {
+            // Show progress
+            this.showAutoFillProgress();
+
+            // Prepare data for LLM
+            const requestData = {
+                fields: this.analyzedFields,
+                project: {
+                    id: this.selectedProject.id,
+                    name: this.selectedProject.name,
+                    planset_text: this.selectedProject.planset_text,
+                    utility_bill_text: this.selectedProject.utility_bill_text
                 }
-                this.autoFillForms();
-            });
-        } else {
-            console.error('❌ Auto Fill button not found!');
-        }
+            };
 
-        // Clear forms button
-        const clearFormsBtn = document.getElementById('clearFormsBtn');
-        if (clearFormsBtn) {
-            console.log('✅ Clear Forms button found, adding event listener');
-            clearFormsBtn.addEventListener('click', () => {
-                console.log('🖱️ Clear Forms button clicked!');
-                this.clearForms();
+            // Send to backend for LLM processing
+            const response = await fetch(`${this.webAppUrl}/api/auto-fill`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestData)
             });
-        } else {
-            console.error('❌ Clear Forms button not found!');
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Auto-fill response:', result);
+
+            // Apply the field values
+            await this.applyFieldValues(result.fieldValues);
+
+            // Hide progress
+            this.hideAutoFillProgress();
+
+            alert('✅ Form auto-filled successfully!');
+
+        } catch (error) {
+            console.error('❌ Auto-fill failed:', error);
+            this.hideAutoFillProgress();
+            alert(`Auto-fill failed: ${error.message}`);
+        }
+    }
+
+    showAutoFillProgress() {
+        const resultsSection = document.getElementById('resultsSection');
+        const autofillProgress = document.getElementById('autofillProgress');
+
+        if (resultsSection && autofillProgress) {
+            resultsSection.style.display = 'block';
+            autofillProgress.style.display = 'block';
+        }
+    }
+
+    hideAutoFillProgress() {
+        const autofillProgress = document.getElementById('autofillProgress');
+        if (autofillProgress) {
+            autofillProgress.style.display = 'none';
+        }
+    }
+
+    async applyFieldValues(fieldValues) {
+        console.log('🖊️ Applying field values:', fieldValues);
+
+        try {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs.length === 0) return;
+
+            // Use the existing auto-fill logic but with the new field values
+            await this.fillFormsWithMappings(fieldValues);
+
+        } catch (error) {
+            console.error('❌ Failed to apply field values:', error);
+            throw error;
         }
     }
 
@@ -289,7 +629,9 @@ class SmartFormGuideSidebar {
             return input.placeholder || input.name || 'Unknown Field';
         }
 
-        // Detect form fields
+        // Group radio buttons by name and handle other inputs
+        const radioGroups = new Map();
+
         inputs.forEach((input, index) => {
             // Skip hidden, submit, button inputs and disabled fields
             if (input.type === 'hidden' || input.type === 'submit' ||
@@ -303,6 +645,16 @@ class SmartFormGuideSidebar {
                 return;
             }
 
+            // Handle radio buttons specially - group them by name
+            if (input.type === 'radio' && input.name) {
+                if (!radioGroups.has(input.name)) {
+                    radioGroups.set(input.name, []);
+                }
+                radioGroups.get(input.name).push(input);
+                return; // Skip individual processing for radio buttons
+            }
+
+            // Handle non-radio fields normally
             const label = getFieldLabel(input);
             const field = {
                 id: input.id || `field_${index}`,
@@ -330,6 +682,66 @@ class SmartFormGuideSidebar {
             fields.push(field);
         });
 
+        // Process radio button groups
+        radioGroups.forEach((radioButtons, groupName) => {
+            const visibleRadios = radioButtons.filter(radio => isElementVisible(radio));
+            if (visibleRadios.length === 0) return;
+
+            const firstRadio = visibleRadios[0];
+            let groupLabel = getRadioGroupLabel(visibleRadios) || getFieldLabel(firstRadio);
+
+            // Collect all options
+            const options = visibleRadios.map(radio => ({
+                value: radio.value,
+                label: getFieldLabel(radio) || radio.value,
+                checked: radio.checked
+            }));
+
+            const radioGroupField = {
+                id: groupName || `radio_group_${fields.length}`,
+                name: groupName,
+                type: 'radio-group',
+                placeholder: '',
+                label: groupLabel,
+                value: visibleRadios.find(r => r.checked)?.value || '',
+                required: visibleRadios.some(r => r.required),
+                fieldType: 'radio',
+                options: options
+            };
+
+            fields.push(radioGroupField);
+        });
+
+        // Helper function to get radio group label
+        function getRadioGroupLabel(radioButtons) {
+            const firstRadio = radioButtons[0];
+            let parent = firstRadio.parentElement;
+
+            // Look for fieldset legend or common parent with label
+            while (parent && parent !== document.body) {
+                // Check for fieldset with legend
+                if (parent.tagName === 'FIELDSET') {
+                    const legend = parent.querySelector('legend');
+                    if (legend) {
+                        return legend.textContent.trim();
+                    }
+                }
+
+                // Check for div/section with a label-like element
+                const labelElement = parent.querySelector('label:not([for]), .label, .field-label, h3, h4, h5, h6');
+                if (labelElement && !radioButtons.some(radio => labelElement.contains(radio))) {
+                    const labelText = labelElement.textContent.trim();
+                    if (labelText && labelText.length > 0) {
+                        return labelText;
+                    }
+                }
+
+                parent = parent.parentElement;
+            }
+
+            return null;
+        }
+
         return {
             formsCount: forms.length,
             fields: fields,
@@ -343,17 +755,51 @@ class SmartFormGuideSidebar {
         const formFieldsList = document.getElementById('formFieldsList');
         if (!formFieldsList) return;
 
-        const fieldsHtml = this.formFields.map(field => `
-            <div class="form-field-item">
-                <div class="field-info">
-                    <span class="field-label">${field.label}</span>
-                    <span class="field-type">${field.type}</span>
-                </div>
-                <div class="field-value">
-                    <input type="text" placeholder="Auto-fill value" data-field-id="${field.id}" />
-                </div>
-            </div>
-        `).join('');
+        const fieldsHtml = this.formFields.map(field => {
+            if (field.type === 'radio-group' && field.options) {
+                // Render radio group with options
+                const optionsHtml = field.options.map(option =>
+                    `<div class="radio-option">
+                        <span class="option-label">${option.label}</span>
+                        <span class="option-value">${option.value}</span>
+                        ${option.checked ? '<span class="selected-indicator">✓</span>' : ''}
+                    </div>`
+                ).join('');
+
+                return `
+                    <div class="form-field-item radio-group-item">
+                        <div class="field-info">
+                            <span class="field-label">${field.label}</span>
+                            <span class="field-type">${field.type}</span>
+                        </div>
+                        <div class="radio-options">
+                            ${optionsHtml}
+                        </div>
+                        <div class="field-value">
+                            <select data-field-id="${field.id}" data-field-type="radio-group">
+                                <option value="">Select an option...</option>
+                                ${field.options.map(option =>
+                                    `<option value="${option.value}" ${option.checked ? 'selected' : ''}>${option.label}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Render regular field
+                return `
+                    <div class="form-field-item">
+                        <div class="field-info">
+                            <span class="field-label">${field.label}</span>
+                            <span class="field-type">${field.type}</span>
+                        </div>
+                        <div class="field-value">
+                            <input type="text" placeholder="Auto-fill value" data-field-id="${field.id}" />
+                        </div>
+                    </div>
+                `;
+            }
+        }).join('');
 
         formFieldsList.innerHTML = fieldsHtml;
     }
@@ -738,6 +1184,31 @@ RESPONSE FORMAT (JSON only, no other text):
                     Object.entries(mappings).forEach(([fieldId, value]) => {
                         if (!value || value === 'N/A') return;
 
+                        // Check if this is a radio group (fieldId might be a radio group name)
+                        const radioButtons = document.querySelectorAll(`input[type="radio"][name="${fieldId}"]`);
+
+                        if (radioButtons.length > 0) {
+                            // Handle radio button group
+                            let radioFilled = false;
+                            radioButtons.forEach(radio => {
+                                // Try to match by value or label
+                                const radioLabel = getFieldLabel(radio) || radio.value;
+                                if (radio.value === value ||
+                                    radioLabel.toLowerCase().includes(value.toLowerCase()) ||
+                                    value.toLowerCase().includes(radioLabel.toLowerCase())) {
+                                    radio.checked = true;
+                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                    filled++;
+                                    radioFilled = true;
+                                    console.log(`✅ Selected radio ${fieldId} with value: ${radio.value}`);
+                                    return;
+                                }
+                            });
+
+                            if (radioFilled) return; // Skip regular field processing
+                        }
+
+                        // Regular field processing
                         // Try to find element by ID first
                         let element = document.getElementById(fieldId);
 
@@ -752,13 +1223,42 @@ RESPONSE FORMAT (JSON only, no other text):
                         }
 
                         if (element && element.type !== 'hidden' && element.type !== 'submit' && element.type !== 'button') {
-                            element.value = value;
-                            element.dispatchEvent(new Event('input', { bubbles: true }));
-                            element.dispatchEvent(new Event('change', { bubbles: true }));
+                            if (element.type === 'radio') {
+                                // Handle individual radio button
+                                element.checked = true;
+                                element.dispatchEvent(new Event('change', { bubbles: true }));
+                            } else {
+                                // Handle regular input
+                                element.value = value;
+                                element.dispatchEvent(new Event('input', { bubbles: true }));
+                                element.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
                             filled++;
                             console.log(`✅ Filled ${fieldId} with: ${value}`);
                         }
                     });
+
+                    // Helper function to get field label (same as in content script)
+                    function getFieldLabel(input) {
+                        // Try to find associated label by 'for' attribute
+                        if (input.id) {
+                            const label = document.querySelector(`label[for="${input.id}"]`);
+                            if (label) return label.textContent.trim();
+                        }
+
+                        // Try parent label
+                        const parentLabel = input.closest('label');
+                        if (parentLabel) {
+                            return parentLabel.textContent.replace(input.value, '').trim();
+                        }
+
+                        // Check for aria-label
+                        if (input.getAttribute('aria-label')) {
+                            return input.getAttribute('aria-label').trim();
+                        }
+
+                        return '';
+                    }
 
                     return filled;
                 },

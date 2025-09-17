@@ -111,11 +111,29 @@ class FormAssistant {
 
     analyzeForm(form, formIndex) {
         const inputs = form.querySelectorAll('input, select, textarea');
-        
+        const radioGroups = new Map(); // Track radio button groups by name
+
         inputs.forEach((input, inputIndex) => {
-            const fieldInfo = this.analyzeField(input, formIndex, inputIndex);
-            if (fieldInfo) {
-                this.detectedFields.push(fieldInfo);
+            // Handle radio buttons specially - group them by name
+            if (input.type === 'radio' && input.name) {
+                if (!radioGroups.has(input.name)) {
+                    radioGroups.set(input.name, []);
+                }
+                radioGroups.get(input.name).push(input);
+            } else {
+                // Handle non-radio fields normally
+                const fieldInfo = this.analyzeField(input, formIndex, inputIndex);
+                if (fieldInfo) {
+                    this.detectedFields.push(fieldInfo);
+                }
+            }
+        });
+
+        // Process radio button groups
+        radioGroups.forEach((radioButtons, groupName) => {
+            const radioGroupInfo = this.analyzeRadioGroup(radioButtons, formIndex, groupName);
+            if (radioGroupInfo) {
+                this.detectedFields.push(radioGroupInfo);
             }
         });
     }
@@ -152,6 +170,86 @@ class FormAssistant {
         fieldInfo.confidence = this.calculateConfidence(fieldInfo);
 
         return fieldInfo;
+    }
+
+    analyzeRadioGroup(radioButtons, formIndex, groupName) {
+        // Skip if no radio buttons or all are hidden/disabled
+        const visibleRadios = radioButtons.filter(radio =>
+            !radio.disabled && this.isElementVisible(radio)
+        );
+
+        if (visibleRadios.length === 0) {
+            return null;
+        }
+
+        // Use the first visible radio button as the representative element
+        const firstRadio = visibleRadios[0];
+
+        // Get the group label - try to find a common label or use the first radio's label
+        let groupLabel = this.getRadioGroupLabel(visibleRadios);
+        if (!groupLabel) {
+            groupLabel = this.getFieldLabel(firstRadio);
+        }
+
+        // Collect all options
+        const options = visibleRadios.map(radio => ({
+            value: radio.value,
+            label: this.getFieldLabel(radio) || radio.value,
+            checked: radio.checked,
+            element: radio
+        }));
+
+        // Create field info for the radio group
+        const fieldInfo = {
+            element: firstRadio, // Representative element for the group
+            id: groupName || `radio_group_${formIndex}`,
+            name: groupName,
+            type: 'radio-group',
+            label: groupLabel,
+            placeholder: '',
+            value: visibleRadios.find(r => r.checked)?.value || '',
+            required: visibleRadios.some(r => r.required),
+            fieldType: 'radio',
+            confidence: 0,
+            xpath: this.getElementXPath(firstRadio),
+            options: options, // Store all radio button options
+            radioButtons: visibleRadios // Store references to all radio elements
+        };
+
+        // Calculate confidence score
+        fieldInfo.confidence = this.calculateConfidence(fieldInfo);
+
+        return fieldInfo;
+    }
+
+    getRadioGroupLabel(radioButtons) {
+        // Try to find a common parent element that might contain the group label
+        const firstRadio = radioButtons[0];
+        let parent = firstRadio.parentElement;
+
+        // Look for fieldset legend or common parent with label
+        while (parent && parent !== document.body) {
+            // Check for fieldset with legend
+            if (parent.tagName === 'FIELDSET') {
+                const legend = parent.querySelector('legend');
+                if (legend) {
+                    return legend.textContent.trim();
+                }
+            }
+
+            // Check for div/section with a label-like element
+            const labelElement = parent.querySelector('label:not([for]), .label, .field-label, h3, h4, h5, h6');
+            if (labelElement && !radioButtons.some(radio => labelElement.contains(radio))) {
+                const labelText = labelElement.textContent.trim();
+                if (labelText && labelText.length > 0) {
+                    return labelText;
+                }
+            }
+
+            parent = parent.parentElement;
+        }
+
+        return null;
     }
 
     isElementVisible(element) {
@@ -349,11 +447,29 @@ class FormAssistant {
     detectStandaloneFields() {
         // Detect input fields that are not inside forms
         const standaloneInputs = document.querySelectorAll('input:not(form input), select:not(form select), textarea:not(form textarea)');
+        const radioGroups = new Map(); // Track radio button groups by name
 
         standaloneInputs.forEach((input, index) => {
-            const fieldInfo = this.analyzeField(input, -1, index);
-            if (fieldInfo) {
-                this.detectedFields.push(fieldInfo);
+            // Handle radio buttons specially - group them by name
+            if (input.type === 'radio' && input.name) {
+                if (!radioGroups.has(input.name)) {
+                    radioGroups.set(input.name, []);
+                }
+                radioGroups.get(input.name).push(input);
+            } else {
+                // Handle non-radio fields normally
+                const fieldInfo = this.analyzeField(input, -1, index);
+                if (fieldInfo) {
+                    this.detectedFields.push(fieldInfo);
+                }
+            }
+        });
+
+        // Process radio button groups
+        radioGroups.forEach((radioButtons, groupName) => {
+            const radioGroupInfo = this.analyzeRadioGroup(radioButtons, -1, groupName);
+            if (radioGroupInfo) {
+                this.detectedFields.push(radioGroupInfo);
             }
         });
     }
@@ -364,13 +480,40 @@ class FormAssistant {
 
         containers.forEach((container, containerIndex) => {
             const inputs = container.querySelectorAll('input, select, textarea');
+            const radioGroups = new Map(); // Track radio button groups by name
+
             inputs.forEach((input, inputIndex) => {
                 // Skip if already detected
-                if (!this.detectedFields.some(field => field.element === input)) {
-                    const fieldInfo = this.analyzeField(input, `container_${containerIndex}`, inputIndex);
-                    if (fieldInfo) {
-                        this.detectedFields.push(fieldInfo);
+                const alreadyDetected = this.detectedFields.some(field => {
+                    // For radio groups, check if any radio button in the group is already detected
+                    if (field.type === 'radio-group' && field.radioButtons) {
+                        return field.radioButtons.includes(input);
                     }
+                    return field.element === input;
+                });
+
+                if (!alreadyDetected) {
+                    // Handle radio buttons specially - group them by name
+                    if (input.type === 'radio' && input.name) {
+                        if (!radioGroups.has(input.name)) {
+                            radioGroups.set(input.name, []);
+                        }
+                        radioGroups.get(input.name).push(input);
+                    } else {
+                        // Handle non-radio fields normally
+                        const fieldInfo = this.analyzeField(input, `container_${containerIndex}`, inputIndex);
+                        if (fieldInfo) {
+                            this.detectedFields.push(fieldInfo);
+                        }
+                    }
+                }
+            });
+
+            // Process radio button groups
+            radioGroups.forEach((radioButtons, groupName) => {
+                const radioGroupInfo = this.analyzeRadioGroup(radioButtons, `container_${containerIndex}`, groupName);
+                if (radioGroupInfo) {
+                    this.detectedFields.push(radioGroupInfo);
                 }
             });
         });
@@ -388,7 +531,10 @@ class FormAssistant {
                 fieldType: field.fieldType,
                 confidence: field.confidence,
                 required: field.required,
-                xpath: field.xpath
+                xpath: field.xpath,
+                // Include radio group specific data
+                options: field.options || undefined,
+                value: field.value
             }))
         };
 

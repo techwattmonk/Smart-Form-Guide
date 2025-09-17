@@ -49,7 +49,12 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Frontend URLs
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",  # Frontend URLs
+        "chrome-extension://*",   # Allow Chrome extension
+        "*"  # Allow all origins for development (restrict in production)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -341,16 +346,197 @@ EXAMPLE OF GOOD STEPS:
 
 Remember: Each step should be a specific ACTION the user needs to take, not just information. Focus on what they need to DO, not just what they need to know.
 
+IMPORTANT: Do not use any markdown formatting like `**` or `##`. The output should be plain text.
+
 Transform the original requirements into clear steps now:
 """
     response = query_gemini(prompt)
-    smart_flow = response
+    
+    smart_flow = response.replace('**', '')
 
     return {
         "jurisdiction_name": jurisdiction_name,
         "original_steps": steps,
         "smart_guidance_flow": smart_flow
     }
+
+# --- Chrome Extension API Endpoints ---
+
+class FieldAnalysis(BaseModel):
+    url: str
+    title: str
+    timestamp: str
+    fields: List[dict]
+
+class AutoFillRequest(BaseModel):
+    fields: List[dict]
+    project: dict
+
+class AutoFillResponse(BaseModel):
+    fieldValues: dict
+    success: bool
+    message: str
+
+@app.post("/api/analyze-fields")
+async def analyze_fields(field_analysis: FieldAnalysis):
+    """Receive and store field analysis from Chrome extension"""
+    try:
+        # For now, just log the received data
+        # In the future, you could store this in the database for analytics
+        print(f"📋 Received field analysis for {field_analysis.url}")
+        print(f"🔍 Found {len(field_analysis.fields)} fields")
+
+        # Log field types for debugging
+        field_types = {}
+        for field in field_analysis.fields:
+            field_type = field.get('type', 'unknown')
+            field_types[field_type] = field_types.get(field_type, 0) + 1
+
+        print(f"📊 Field types: {field_types}")
+
+        return {
+            "success": True,
+            "message": f"Analyzed {len(field_analysis.fields)} fields",
+            "fieldTypes": field_types
+        }
+
+    except Exception as e:
+        print(f"❌ Error analyzing fields: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to analyze fields: {str(e)}"
+        )
+
+@app.get("/api/projects")
+async def get_projects_for_extension():
+    """Get all projects for Chrome extension (simplified, no auth for now)"""
+    try:
+        # For now, return mock data or get from database without auth
+        # In production, you'd want to implement proper authentication
+
+        # Get database connection
+        from app.database import get_database
+        db = await get_database()
+
+        # Get all projects (simplified - in production add user filtering)
+        projects_cursor = db.projects.find({}).sort("created_at", -1).limit(50)
+        projects = []
+
+        async for project in projects_cursor:
+            # Get extracted text from documents if available
+            planset_text = ""
+            utility_bill_text = ""
+
+            # Check if project has embedded documents with extracted text
+            if project.get("planset_document") and project["planset_document"].get("extracted_text"):
+                planset_text = project["planset_document"]["extracted_text"]
+
+            if project.get("utility_bill_document") and project["utility_bill_document"].get("extracted_text"):
+                utility_bill_text = project["utility_bill_document"]["extracted_text"]
+
+            projects.append({
+                "id": str(project["_id"]),
+                "name": project["name"],
+                "created_at": project["created_at"].isoformat(),
+                "planset_text": planset_text,
+                "utility_bill_text": utility_bill_text
+            })
+
+        print(f"📋 Returning {len(projects)} projects for extension")
+        return projects
+
+    except Exception as e:
+        print(f"❌ Error fetching projects: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch projects: {str(e)}"
+        )
+
+@app.post("/api/auto-fill", response_model=AutoFillResponse)
+async def auto_fill_form(request: AutoFillRequest):
+    """Process form fields with project data using LLM"""
+    try:
+        print(f"🚀 Starting auto-fill for {len(request.fields)} fields")
+        print(f"📋 Using project: {request.project.get('name', 'Unknown')}")
+
+        # Prepare field descriptions for LLM
+        field_descriptions = []
+        for field in request.fields:
+            field_desc = f"Field: {field.get('label', field.get('name', 'Unknown'))}"
+            field_desc += f" (Type: {field.get('type', 'text')}"
+            if field.get('options'):
+                options = [opt.get('label', opt.get('value', '')) for opt in field['options']]
+                field_desc += f", Options: {', '.join(options)}"
+            field_desc += ")"
+            field_descriptions.append(field_desc)
+
+        # Create prompt for LLM
+        prompt = f"""
+You are a smart form-filling assistant for solar permit applications. Based on the provided project documents, fill out the form fields with appropriate values.
+
+PROJECT INFORMATION:
+Project Name: {request.project.get('name', 'N/A')}
+
+PLANSET DOCUMENT TEXT:
+{request.project.get('planset_text', 'No planset text available')}
+
+UTILITY BILL TEXT:
+{request.project.get('utility_bill_text', 'No utility bill text available')}
+
+FORM FIELDS TO FILL:
+{chr(10).join(field_descriptions)}
+
+Please provide appropriate values for each field based on the document content. For radio buttons and dropdowns, select the most appropriate option from the available choices. For text fields, extract or derive the appropriate information from the documents.
+
+Return your response as a JSON object where keys are the field IDs/names and values are the appropriate field values. For radio groups, return the value of the selected option.
+
+Example format:
+{{
+    "customer_name": "John Smith",
+    "program": "simple_solar",
+    "service_type": "new_generating_facility",
+    "project_address": "123 Main St, City, State"
+}}
+"""
+
+        # Call Gemini API
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
+
+        # Parse the response
+        response_text = response.text.strip()
+        print(f"🤖 LLM Response: {response_text}")
+
+        # Try to extract JSON from the response
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            field_values = json.loads(json_match.group())
+        else:
+            # Fallback: create a simple mapping
+            field_values = {}
+            for field in request.fields:
+                field_id = field.get('id', field.get('name', ''))
+                if field_id:
+                    field_values[field_id] = "Auto-filled value"
+
+        print(f"✅ Generated field values: {field_values}")
+
+        return AutoFillResponse(
+            fieldValues=field_values,
+            success=True,
+            message=f"Successfully processed {len(field_values)} fields"
+        )
+
+    except Exception as e:
+        print(f"❌ Auto-fill error: {e}")
+        return AutoFillResponse(
+            fieldValues={},
+            success=False,
+            message=f"Auto-fill failed: {str(e)}"
+        )
 
 # --- Endpoints ---
 @app.post("/upload_pdfs/", response_model=UploadResponse)
@@ -842,12 +1028,14 @@ EXAMPLE OF GOOD STEPS:
 
 Remember: Each step should be a specific ACTION the user needs to take, not just information. Focus on what they need to DO, not just what they need to know.
 
+IMPORTANT: Do not use any markdown formatting like `**` or `##`. The output should be plain text.
+
 Transform the original requirements into clear steps now:
 """
     # Call Gemini to enhance steps
     response = query_gemini(prompt)
 
-    smart_flow = response
+    smart_flow = response.replace('**', '')
 
     return {
         "jurisdiction_name": jurisdiction_name,
